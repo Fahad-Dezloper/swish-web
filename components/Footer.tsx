@@ -54,9 +54,16 @@ export function Footer() {
             href="https://x.com/swishdotcash"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-[#121212]/70 transition-colors"
+            aria-label="X (formerly Twitter)"
+            className="group flex items-center"
           >
-            X
+            <Image
+              src="/assets/x-icon.svg"
+              alt=""
+              width={12}
+              height={12}
+              className="opacity-40 group-hover:opacity-100 transition-opacity"
+            />
           </a>
           <span>·</span>
           <a

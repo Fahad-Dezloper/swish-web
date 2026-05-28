@@ -8,6 +8,7 @@ import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { QRScanner } from "./QRScanner";
 import { ProtocolBadge } from "./ProtocolBadge";
+import { ProtocolSidebar } from "./ProtocolSidebar";
 import { formatNumber } from "@/utils";
 import { useSendTransaction } from "@/hooks/useSendTransaction";
 import { useUmbraSend } from "@/hooks/useUmbraSend";
@@ -61,6 +62,7 @@ export function SendModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [isResolvingX, setIsResolvingX] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { send } = useSendTransaction();
   const { send: umbraSend, state: umbraSendState } = useUmbraSend();
   const { status: umbraStatus } = useUmbraStatus();
@@ -453,104 +455,6 @@ export function SendModal({
                 )}
               </div>
 
-              {/* Privacy provider picker (compact) */}
-              <div className="mb-6">
-                <label className="text-sm text-[#121212]/50 mb-1 block">
-                  Privacy protocol
-                </label>
-                <div className="space-y-1.5">
-                  <button
-                    onClick={() => {
-                      if (noAutoTarget) return;
-                      setProvider("auto");
-                    }}
-                    disabled={noAutoTarget}
-                    title={
-                      noAutoTarget
-                        ? "All privacy protocols are temporarily unavailable"
-                        : undefined
-                    }
-                    className={`w-fit min-w-[72px] h-9 px-4 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                      provider === "auto"
-                        ? "bg-[#121212] text-[#fafafa]"
-                        : noAutoTarget
-                          ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                          : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                    }`}
-                  >
-                    Auto
-                  </button>
-                  <div className="flex gap-1.5">
-                    {(
-                      [
-                        "umbra",
-                        "magicblock-per",
-                        "privacy-cash",
-                      ] as ProviderId[]
-                    ).map((p) => {
-                      const senderUmbraDisabled =
-                        p === "umbra" && umbraStatus !== "registered";
-                      const recipientUmbraDisabled =
-                        p === "umbra" &&
-                        recipientUmbraStatus === "unregistered";
-                      const maintenanceDisabled = isProviderDisabled(p);
-                      const isDisabled =
-                        senderUmbraDisabled ||
-                        recipientUmbraDisabled ||
-                        maintenanceDisabled;
-                      return (
-                        <button
-                          key={p}
-                          onClick={() => {
-                            if (isDisabled) return;
-                            setProvider(p);
-                          }}
-                          disabled={isDisabled}
-                          title={
-                            maintenanceDisabled
-                              ? "Temporarily unavailable (maintenance)"
-                              : undefined
-                          }
-                          className={`flex-1 min-w-[72px] h-9 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                            provider === p
-                              ? "bg-[#121212] text-[#fafafa]"
-                              : isDisabled
-                                ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                                : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                          }`}
-                        >
-                          <ProtocolBadge providerId={p} iconSize={14} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                {umbraStatus === "unregistered" && (
-                  <p className="text-xs text-[#121212]/50 mt-2">
-                    Enable Umbra in your{" "}
-                    <a
-                      href="/p"
-                      className="underline underline-offset-2 decoration-dashed hover:text-[#121212]"
-                    >
-                      profile
-                    </a>{" "}
-                    to send via Umbra.
-                  </p>
-                )}
-                {umbraStatus === "registered" &&
-                  recipientUmbraStatus === "checking" && (
-                    <p className="text-xs text-[#121212]/40 mt-2">
-                      Checking recipient on Umbra…
-                    </p>
-                  )}
-                {umbraStatus === "registered" &&
-                  recipientUmbraStatus === "unregistered" && (
-                    <p className="text-xs text-[#121212]/50 mt-2">
-                      Recipient is not registered on Umbra
-                    </p>
-                  )}
-              </div>
-
               {/* Amount Details */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
@@ -559,18 +463,58 @@ export function SendModal({
                     {formatNumber(numAmount)} USDC
                   </span>
                 </div>
-                {provider === "auto" &&
-                  ((recipientType === "wallet" && isValidAddress) ||
-                    (recipientType === "x" && isValidXHandle)) && (
-                    <div className="flex justify-between">
+                {((recipientType === "wallet" && isValidAddress) ||
+                  (recipientType === "x" && isValidXHandle)) &&
+                  // Hide the row entirely while auto is still resolving;
+                  // show once a protocol is known (auto-resolved or manual)
+                  (provider !== "auto" || autoResolved) && (
+                  <>
+                    <div className="flex justify-between items-center">
                       <span className="text-[#121212]">Routed via</span>
-                      {autoResolved ? (
-                        <ProtocolBadge providerId={autoResolved} />
-                      ) : (
-                        <span className="text-[#121212]">…</span>
-                      )}
+                      <button
+                        onClick={() => setPickerOpen(true)}
+                        className="flex items-center gap-1.5 text-[#121212] cursor-pointer hover:opacity-70 transition-opacity"
+                      >
+                        {provider === "auto" && autoResolved ? (
+                          <>
+                            <span className="text-[10px] font-medium text-[#121212]/60 uppercase tracking-wide px-1.5 py-0.5 rounded-md border border-[#121212]/15">
+                              Auto
+                            </span>
+                            <ProtocolBadge providerId={autoResolved} />
+                          </>
+                        ) : (
+                          <ProtocolBadge providerId={provider as ProviderId} />
+                        )}
+                        <Image
+                          src="/assets/chevron-down-icon.svg"
+                          alt=""
+                          width={10}
+                          height={10}
+                          className="-rotate-90"
+                        />
+                      </button>
                     </div>
-                  )}
+                    {provider === "umbra" && umbraStatus === "unregistered" && (
+                      <p className="text-xs text-[#121212]/50">
+                        Enable Umbra in your{" "}
+                        <a
+                          href="/p"
+                          className="underline underline-offset-2 decoration-dashed hover:text-[#121212]"
+                        >
+                          profile
+                        </a>{" "}
+                        to send via Umbra.
+                      </p>
+                    )}
+                    {provider === "umbra" &&
+                      umbraStatus === "registered" &&
+                      recipientUmbraStatus === "unregistered" && (
+                        <p className="text-xs text-[#121212]/50">
+                          Recipient is not registered on Umbra
+                        </p>
+                      )}
+                  </>
+                )}
                 <div className="flex justify-between">
                   <div>
                     <span className="text-[#121212]">Partner Fees</span>
@@ -599,7 +543,10 @@ export function SendModal({
                   !canProceed ||
                   isResolvingX ||
                   umbraBlockedByRecipient ||
-                  (provider === "auto" && (noAutoTarget || autoUnavailable))
+                  // Block until a protocol is actually chosen (auto-resolved
+                  // counts). Covers loading + router failure cases.
+                  (provider === "auto" &&
+                    (noAutoTarget || autoUnavailable || !autoResolved))
                 }
                 whileTap={{ scale: 0.98 }}
                 className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
@@ -725,6 +672,23 @@ export function SendModal({
                 Try Again
               </motion.button>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {pickerOpen && (
+            <ProtocolSidebar
+              effectiveProvider={effectiveProvider}
+              onSelect={(p) => {
+                setProvider(p);
+                setPickerOpen(false);
+              }}
+              onClose={() => setPickerOpen(false)}
+              amount={numAmount}
+              flow="send"
+              umbraStatus={umbraStatus}
+              recipientUmbraStatus={recipientUmbraStatus}
+            />
           )}
         </AnimatePresence>
       </Modal>

@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 import { useUserRegistration } from "@/hooks/useUserRegistration";
+import { useDelayedUnmount } from "@/hooks/useDelayedUnmount";
 import { formatNumber } from "@/utils";
 import {
   ActionButton,
@@ -14,6 +15,7 @@ import {
   SendModal,
   ReceiveModal,
   SendClaimModal,
+  IntroOverlay,
 } from "@/components";
 
 type ModalType = "send" | "receive" | "sendClaim" | null;
@@ -29,6 +31,7 @@ export default function Home() {
   } = useUSDCBalance(walletAddress);
   const [amount, setAmount] = useState("0");
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const mountedModal = useDelayedUnmount(activeModal, 350);
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -165,8 +168,35 @@ export default function Home() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-[#fafafa] border border-[#121212]/10 rounded-2xl shadow-lg z-50 overflow-hidden"
+                  className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-[#fafafa] border border-[#121212]/10 rounded-2xl shadow-lg z-50 overflow-hidden"
                 >
+                  {/* Assets */}
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <Image
+                      src="/assets/usdc-icon.svg"
+                      alt="USDC"
+                      width={28}
+                      height={28}
+                    />
+                    <div className="flex-1 text-left leading-tight">
+                      <div className="text-[#121212] text-sm font-medium">
+                        {balance !== null ? formatNumber(balance) : "0.00"}
+                      </div>
+                      <div className="text-[#121212]/40 text-xs mt-0.5">
+                        ~ ${balance !== null ? formatNumber(balance) : "0.00"}
+                      </div>
+                    </div>
+                    <Image
+                      src="/assets/success-alt.svg"
+                      alt="Active asset"
+                      width={12}
+                      height={6}
+                    />
+                  </div>
+
+                  {/* Separator */}
+                  <div className="h-px bg-[#121212]/[0.08] mx-4" />
+
                   {/* Wallet Address */}
                   <button
                     onClick={copied ? undefined : handleCopyAddress}
@@ -276,10 +306,12 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Modals - only render when active to avoid multiple hook instances */}
-      {activeModal === "send" && (
+      {/* Modals - only render when active to avoid multiple hook instances.
+          `mountedModal` lingers ~350ms past close so Modal's exit animation
+          can play before the component is unmounted. */}
+      {mountedModal === "send" && (
         <SendModal
-          isOpen={true}
+          isOpen={activeModal === "send"}
           onClose={closeModal}
           amount={amount}
           onSendViaClaim={() => setActiveModal("sendClaim")}
@@ -287,23 +319,25 @@ export default function Home() {
         />
       )}
 
-      {activeModal === "receive" && (
+      {mountedModal === "receive" && (
         <ReceiveModal
-          isOpen={true}
+          isOpen={activeModal === "receive"}
           onClose={closeModal}
           amount={amount}
           getSignature={getSignature}
         />
       )}
 
-      {activeModal === "sendClaim" && (
+      {mountedModal === "sendClaim" && (
         <SendClaimModal
-          isOpen={true}
+          isOpen={activeModal === "sendClaim"}
           onClose={closeModal}
           amount={amount}
           getSignature={getSignature}
         />
       )}
+
+      <IntroOverlay />
     </>
   );
 }
