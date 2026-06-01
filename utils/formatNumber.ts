@@ -1,6 +1,19 @@
+const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
+
+// Render a count as subscript digits, e.g. 3 -> "₃", 12 -> "₁₂".
+function toSubscript(n: number): string {
+  return String(n)
+    .split("")
+    .map((d) => SUBSCRIPT_DIGITS[Number(d)])
+    .join("");
+}
+
 /**
  * Formats a number for display.
- * - Below 1000: truncates to 3 decimals (no rounding either way) so a
+ * - Below 0.001 (but > 0): subscript zero-count notation so a real balance
+ *   isn't hidden as "0". A small digit counts the leading zeros, then up to
+ *   3 significant digits (truncated). e.g. 0.0004 -> "0.0₃4".
+ * - 0.001 to <1000: truncates to 3 decimals (no rounding either way) so a
  *   balance is shown as-is and never rounded up to something the user
  *   doesn't actually hold. Trailing zeros stripped.
  * - 1000+: abbreviated with K/M/B and up to 2 decimals (truncated).
@@ -8,13 +21,13 @@
  * - Removes decimal entirely if .0 (e.g., 1.0 -> 1)
  *
  * Examples:
+ * - 0.0004 -> "0.0₃4"
+ * - 0.000045 -> "0.0₄45"
  * - 0.114567 -> "0.114"
  * - 1.5 -> "1.5"
  * - 999 -> "999"
  * - 1000 -> "1K"
  * - 1234 -> "1.23K"
- * - 1500 -> "1.5K"
- * - 1000000 -> "1M"
  * - 1500000000 -> "1.5B"
  */
 export function formatNumber(num: number): string {
@@ -42,6 +55,20 @@ export function formatNumber(num: number): string {
   // For numbers less than 1000
   if (Number.isInteger(num)) {
     return num.toString();
+  }
+
+  // Below 0.001 the 3-decimal truncation would collapse to "0" and hide a
+  // real balance. Use subscript zero-count notation: a small digit counts
+  // the leading zeros, then up to 3 significant digits (truncated, no
+  // rounding). The leading "0" after "0." is decorative — the subscript is
+  // the source of truth for the zero count. e.g. 0.000045 -> "0.0₄45".
+  if (num < 0.001) {
+    const decimals = num.toFixed(12).split(".")[1];
+    const leadingZeros = decimals.search(/[1-9]/);
+    // -1 = no significant digit within precision; treat as 0.
+    if (leadingZeros === -1) return "0";
+    const sig = decimals.slice(leadingZeros).replace(/0+$/, "").slice(0, 3);
+    return `0.0${toSubscript(leadingZeros)}${sig}`;
   }
 
   // Truncate to 3 decimals, no rounding. toFixed(6) is exact for USDC
