@@ -12,9 +12,10 @@
  *     else                                     → privacy-cash
  *
  * Liveness is a 30s-cached `/health` probe — best-effort, doesn't catch
- * partial outages where /health is ok but /transfer 405s. Client-side
- * dispatch retry handles those cases by falling back MB→PC after a
- * failed prepare.
+ * partial outages where /health is ok but /transfer 405s. Those now surface
+ * as a failed send on the client (the old silent MB→PC dispatch retry was
+ * removed — auto-switching changed the fee the user agreed to); the user
+ * retries or picks another protocol manually.
  *
  * Why never auto-pick Umbra for send_claim: the burner SC pattern adds
  * 0.7% claim fee + extra failure modes without giving the recipient any

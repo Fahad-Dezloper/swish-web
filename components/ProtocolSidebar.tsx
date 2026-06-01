@@ -8,6 +8,12 @@ import { useFee } from "@/hooks/useFee";
 import { estimateFee, type FlowKind } from "@/lib/fees";
 import type { ProviderId } from "@/lib/providers/types";
 import { isProviderDisabled } from "@/lib/providers/maintenance";
+import type { UmbraStatus } from "@/hooks/useUmbraStatus";
+
+// Accepts both the sender's live status (UmbraStatus, from useUmbraStatus)
+// and the recipient-check states ("idle"/"checking"). Only "registered" is
+// ever treated as eligible, so the exact other value doesn't matter.
+type UmbraEligibility = UmbraStatus | "idle" | "checking";
 
 interface ProtocolMeta {
   signatures: string;
@@ -55,13 +61,12 @@ interface ProtocolSidebarProps {
   onClose: () => void;
   amount: number;
   flow: FlowKind;
-  umbraStatus: "idle" | "checking" | "registered" | "unregistered" | "error";
-  recipientUmbraStatus:
-    | "idle"
-    | "checking"
-    | "registered"
-    | "unregistered"
-    | "error";
+  umbraStatus: UmbraEligibility;
+  recipientUmbraStatus: UmbraEligibility;
+  // When true (default) the panel slides in from the right — used inside
+  // SendModal/SendClaimModal where it overlays the form. Set false when the
+  // panel IS the modal (e.g. the request page) so only the modal animates.
+  slideIn?: boolean;
 }
 
 export function ProtocolSidebar({
@@ -72,6 +77,7 @@ export function ProtocolSidebar({
   flow,
   umbraStatus,
   recipientUmbraStatus,
+  slideIn = true,
 }: ProtocolSidebarProps) {
   const { baseFee } = useFee();
 
@@ -83,35 +89,51 @@ export function ProtocolSidebar({
     return isProviderDisabled(p);
   };
 
+  // Send & Claim never routes through Umbra (the burner SC pattern adds a
+  // 0.7% claim fee + failure modes without giving the recipient any privacy
+  // benefit — see lib/router/autoRoute.ts). Drop it from the SC picker.
+  const preference =
+    flow === "send_claim"
+      ? PROTOCOL_PREFERENCE.filter((p) => p !== "umbra")
+      : PROTOCOL_PREFERENCE;
+
   // Sort: available protocols first (preserve preference order), disabled at bottom
   const orderedProtocols = [
-    ...PROTOCOL_PREFERENCE.filter((p) => !isProtocolDisabled(p)),
-    ...PROTOCOL_PREFERENCE.filter((p) => isProtocolDisabled(p)),
+    ...preference.filter((p) => !isProtocolDisabled(p)),
+    ...preference.filter((p) => isProtocolDisabled(p)),
   ];
 
   return (
     <motion.div
-      initial={{ x: "100%" }}
-      animate={{ x: 0 }}
-      exit={{ x: "100%" }}
-      transition={{ type: "spring", damping: 28, stiffness: 220 }}
+      {...(slideIn
+        ? {
+            initial: { x: "100%" },
+            animate: { x: 0 },
+            exit: { x: "100%" },
+            transition: { type: "spring", damping: 28, stiffness: 220 },
+          }
+        : {})}
       className="absolute inset-0 z-50 bg-[#fafafa] flex flex-col overflow-y-auto"
     >
-      {/* Header */}
+      {/* Header — the back button only makes sense as a slide-over panel
+          (returns to the form behind it). As a standalone modal there's
+          nothing to go back to, so it's dropped (dismiss via backdrop). */}
       <div className="flex items-center gap-3 px-6 pt-2 pb-4 sticky top-0 bg-[#fafafa] z-10">
-        <button
-          onClick={onClose}
-          aria-label="Back to send"
-          className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer hover:bg-[#121212]/5 transition-colors"
-        >
-          <Image
-            src="/assets/chevron-down-icon.svg"
-            alt=""
-            width={12}
-            height={12}
-            className="rotate-90"
-          />
-        </button>
+        {slideIn && (
+          <button
+            onClick={onClose}
+            aria-label="Back to send"
+            className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer hover:bg-[#121212]/5 transition-colors"
+          >
+            <Image
+              src="/assets/chevron-down-icon.svg"
+              alt=""
+              width={12}
+              height={12}
+              className="rotate-90"
+            />
+          </button>
+        )}
         <h3 className="text-lg font-semibold text-[#121212]">
           Choose protocol
         </h3>

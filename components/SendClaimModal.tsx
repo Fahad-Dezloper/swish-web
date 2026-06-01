@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { ProtocolBadge } from "./ProtocolBadge";
+import { ProtocolSidebar } from "./ProtocolSidebar";
 import { formatNumber } from "@/utils";
 import { useSendClaimTransaction } from "@/hooks/useSendClaimTransaction";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
@@ -15,10 +16,7 @@ import {
   type GetSessionSignature,
 } from "@/hooks/useSessionSignature";
 import type { ProviderId } from "@/lib/providers/types";
-import {
-  areAllProvidersDisabled,
-  isProviderDisabled,
-} from "@/lib/providers/maintenance";
+import { areAllProvidersDisabled } from "@/lib/providers/maintenance";
 
 const SC_PROVIDER_POOL: ProviderId[] = ["magicblock-per", "privacy-cash"];
 
@@ -49,6 +47,7 @@ export function SendClaimModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [provider, setProvider] = useState<ProviderChoice>("auto");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { sendClaim } = useSendClaimTransaction();
   // Each protocol's SC reclaim uses its own session message — the burner
   // privkey is encrypted with the sender's protocol-specific signature so
@@ -96,7 +95,7 @@ export function SendClaimModal({
     // useAutoRoute hasn't returned yet (rare — auth + senderAddress
     // happen before the modal opens in practice), fall back to PC so
     // the user can proceed.
-    let dispatchProvider: ProviderId =
+    const dispatchProvider: ProviderId =
       provider === "auto"
         ? (autoResolved ?? "privacy-cash")
         : (provider as ProviderId);
@@ -118,43 +117,21 @@ export function SendClaimModal({
     setErrorMessage(null);
 
     try {
-      try {
-        const result = await sendClaim({
-          amount: numAmount,
-          token: "USDC",
-          message: message.trim() || undefined,
-          signature: session.signature,
-          senderPublicKey: session.address,
-          providerId: dispatchProvider,
-        });
+      // No silent fallback: if the resolved provider fails, surface the
+      // error and let the user retry. Auto-switching protocols changes the
+      // fee the user agreed to without consent.
+      const result = await sendClaim({
+        amount: numAmount,
+        token: "USDC",
+        message: message.trim() || undefined,
+        signature: session.signature,
+        senderPublicKey: session.address,
+        providerId: dispatchProvider,
+      });
 
-        setClaimLink(result.claimLink);
-        setPassphrase(result.passphrase);
-        setState("success");
-      } catch (mbErr: any) {
-        // Layer 2 fallback: under Auto, if MB dispatch fails (catches
-        // partial outages /health doesn't see), retry once with PC.
-        // Costs a PC session-sig prompt if not cached.
-        if (provider === "auto" && dispatchProvider === "magicblock-per") {
-          console.warn("MB SC failed under Auto, falling back to PC:", mbErr);
-          const pcSession = await getSignature();
-          if (!pcSession) throw mbErr;
-          dispatchProvider = "privacy-cash";
-          const result = await sendClaim({
-            amount: numAmount,
-            token: "USDC",
-            message: message.trim() || undefined,
-            signature: pcSession.signature,
-            senderPublicKey: pcSession.address,
-            providerId: "privacy-cash",
-          });
-          setClaimLink(result.claimLink);
-          setPassphrase(result.passphrase);
-          setState("success");
-        } else {
-          throw mbErr;
-        }
-      }
+      setClaimLink(result.claimLink);
+      setPassphrase(result.passphrase);
+      setState("success");
     } catch (error: any) {
       console.error("Send claim failed:", error);
       setErrorMessage(error.message || "Something went wrong");
@@ -226,80 +203,37 @@ export function SendClaimModal({
               </div>
             </div>
 
-            {/* Privacy provider picker */}
-            <div className="mb-6">
-              <label className="text-sm text-[#121212]/50 mb-1 block">
-                Privacy protocol
-              </label>
-              <div className="space-y-1.5">
-                <button
-                  onClick={() => {
-                    if (noAutoTarget) return;
-                    setProvider("auto");
-                  }}
-                  disabled={noAutoTarget}
-                  title={
-                    noAutoTarget
-                      ? "All privacy protocols are temporarily unavailable"
-                      : undefined
-                  }
-                  className={`w-fit min-w-[72px] h-9 px-4 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                    provider === "auto"
-                      ? "bg-[#121212] text-[#fafafa]"
-                      : noAutoTarget
-                        ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                        : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                  }`}
-                >
-                  Auto
-                </button>
-                <div className="flex gap-1.5">
-                  {(
-                    ["magicblock-per", "privacy-cash"] as (
-                      | "magicblock-per"
-                      | "privacy-cash"
-                    )[]
-                  ).map((p) => {
-                    const maintenanceDisabled = isProviderDisabled(p);
-                    return (
-                      <button
-                        key={p}
-                        onClick={() => {
-                          if (maintenanceDisabled) return;
-                          setProvider(p);
-                        }}
-                        disabled={maintenanceDisabled}
-                        title={
-                          maintenanceDisabled
-                            ? "Temporarily unavailable (maintenance)"
-                            : undefined
-                        }
-                        className={`flex-1 min-w-[72px] h-9 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                          provider === p
-                            ? "bg-[#121212] text-[#fafafa]"
-                            : maintenanceDisabled
-                              ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                              : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                        }`}
-                      >
-                        <ProtocolBadge providerId={p} iconSize={14} />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
             {/* Amount Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
                 <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
               </div>
-              {provider === "auto" && autoResolved && (
-                <div className="flex justify-between">
+              {(provider !== "auto" || autoResolved) && (
+                <div className="flex justify-between items-center">
                   <span className="text-[#121212]">Routed via</span>
-                  <ProtocolBadge providerId={autoResolved} />
+                  <button
+                    onClick={() => setPickerOpen(true)}
+                    className="flex items-center gap-1.5 text-[#121212] cursor-pointer hover:opacity-70 transition-opacity"
+                  >
+                    {provider === "auto" && autoResolved ? (
+                      <>
+                        <span className="text-[10px] font-medium text-[#121212]/60 uppercase tracking-wide px-1.5 py-0.5 rounded-md border border-[#121212]/15">
+                          Auto
+                        </span>
+                        <ProtocolBadge providerId={autoResolved} />
+                      </>
+                    ) : (
+                      <ProtocolBadge providerId={provider as ProviderId} />
+                    )}
+                    <Image
+                      src="/assets/chevron-down-icon.svg"
+                      alt=""
+                      width={10}
+                      height={10}
+                      className="-rotate-90"
+                    />
+                  </button>
                 </div>
               )}
               <div className="flex justify-between">
@@ -406,6 +340,23 @@ export function SendClaimModal({
               Try Again
             </motion.button>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {pickerOpen && (
+          <ProtocolSidebar
+            effectiveProvider={effectiveProvider}
+            onSelect={(p) => {
+              setProvider(p as ProviderChoice);
+              setPickerOpen(false);
+            }}
+            onClose={() => setPickerOpen(false)}
+            amount={numAmount}
+            flow="send_claim"
+            umbraStatus="idle"
+            recipientUmbraStatus="idle"
+          />
         )}
       </AnimatePresence>
     </Modal>

@@ -6,17 +6,20 @@ import Image from "next/image";
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { formatNumber } from "@/utils";
-import { Spinner, ProtocolBadge, WalletStatus } from "@/components";
+import {
+  Modal,
+  Spinner,
+  ProtocolBadge,
+  ProtocolSidebar,
+  WalletStatus,
+} from "@/components";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
 import { useAutoRoute } from "@/hooks/useAutoRoute";
 import { useUmbraFulfill } from "@/hooks/useUmbraFulfill";
 import { useUmbraStatus } from "@/hooks/useUmbraStatus";
 import type { ProviderId } from "@/lib/providers/types";
-import {
-  areAllProvidersDisabled,
-  isProviderDisabled,
-} from "@/lib/providers/maintenance";
+import { areAllProvidersDisabled } from "@/lib/providers/maintenance";
 
 const FULFILL_PROVIDER_POOL: ProviderId[] = [
   "umbra",
@@ -66,6 +69,7 @@ export default function RequestPage({
   const [pageState, setPageState] = useState<PageState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [provider, setProvider] = useState<ProviderChoice>("auto");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { fulfill: umbraFulfill, state: umbraFulfillState } = useUmbraFulfill();
   const { status: umbraStatus } = useUmbraStatus();
   const [requesterUmbraStatus, setRequesterUmbraStatus] = useState<
@@ -278,18 +282,10 @@ export default function RequestPage({
         }
       };
 
-      try {
-        await runMbOrPc(dispatchProvider as ProviderId);
-      } catch (mbErr: any) {
-        // Auto-fallback: MB failed under Auto → retry once with PC.
-        if (provider === "auto" && dispatchProvider === "magicblock-per") {
-          console.warn("MB failed under Auto, falling back to PC:", mbErr);
-          dispatchProvider = "privacy-cash";
-          await runMbOrPc("privacy-cash");
-        } else {
-          throw mbErr;
-        }
-      }
+      // No silent fallback: if the resolved provider fails, surface the
+      // error and let the user retry. Auto-switching protocols changes the
+      // fee the user agreed to without consent.
+      await runMbOrPc(dispatchProvider as ProviderId);
 
       setPageState("success");
     } catch (error: any) {
@@ -479,14 +475,36 @@ export default function RequestPage({
 
       {/* Details */}
       <div className="w-full max-w-[320px] space-y-2 mb-8">
-        {provider === "auto" && !isRequestor && (
-          <div className="flex justify-between">
+        {!isRequestor && (provider !== "auto" || autoResolved) && (
+          <div className="flex justify-between items-center">
             <span className="text-[#121212]">Routed via</span>
-            {autoResolved ? (
-              <ProtocolBadge providerId={autoResolved} />
-            ) : (
-              <span className="text-[#121212]">…</span>
-            )}
+            <button
+              onClick={() => {
+                if (pageState === "ready" && authenticated) setPickerOpen(true);
+              }}
+              disabled={!(pageState === "ready" && authenticated)}
+              className="flex items-center gap-1.5 text-[#121212] enabled:cursor-pointer enabled:hover:opacity-70 transition-opacity disabled:cursor-default"
+            >
+              {provider === "auto" && autoResolved ? (
+                <>
+                  <span className="text-[10px] font-medium text-[#121212]/60 uppercase tracking-wide px-1.5 py-0.5 rounded-md border border-[#121212]/15">
+                    Auto
+                  </span>
+                  <ProtocolBadge providerId={autoResolved} />
+                </>
+              ) : (
+                <ProtocolBadge providerId={provider as ProviderId} />
+              )}
+              {pageState === "ready" && authenticated && (
+                <Image
+                  src="/assets/chevron-down-icon.svg"
+                  alt=""
+                  width={10}
+                  height={10}
+                  className="-rotate-90"
+                />
+              )}
+            </button>
           </div>
         )}
         <div className="flex justify-between">
@@ -514,90 +532,6 @@ export default function RequestPage({
         </div>
       </div>
 
-      {/* Privacy provider picker (only for payers, when ready) */}
-      {pageState === "ready" && authenticated && !isRequestor && (
-        <div className="w-full max-w-[320px] mb-4">
-          <label className="text-sm text-[#121212]/50 mb-1 block">
-            Privacy protocol
-          </label>
-          <div className="space-y-1.5">
-            <button
-              onClick={() => {
-                if (noAutoTarget) return;
-                setProvider("auto");
-              }}
-              disabled={noAutoTarget}
-              title={
-                noAutoTarget
-                  ? "All privacy protocols are temporarily unavailable"
-                  : undefined
-              }
-              className={`w-fit min-w-[72px] h-9 px-4 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                provider === "auto"
-                  ? "bg-[#121212] text-[#fafafa]"
-                  : noAutoTarget
-                    ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                    : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-              }`}
-            >
-              Auto
-            </button>
-            <div className="flex gap-1.5">
-              {(
-                [
-                  "umbra",
-                  "magicblock-per",
-                  "privacy-cash",
-                ] as ProviderId[]
-              ).map((p) => {
-                const umbraIneligible =
-                  p === "umbra" &&
-                  (umbraStatus !== "registered" ||
-                    requesterUmbraStatus === "unregistered");
-                const maintenanceDisabled = isProviderDisabled(p);
-                const isDisabled = umbraIneligible || maintenanceDisabled;
-                return (
-                  <button
-                    key={p}
-                    onClick={() => {
-                      if (isDisabled) return;
-                      setProvider(p);
-                    }}
-                    disabled={isDisabled}
-                    title={
-                      maintenanceDisabled
-                        ? "Temporarily unavailable (maintenance)"
-                        : undefined
-                    }
-                    className={`flex-1 min-w-[72px] h-9 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                      provider === p
-                        ? "bg-[#121212] text-[#fafafa]"
-                        : isDisabled
-                          ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                          : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                    }`}
-                  >
-                    <ProtocolBadge providerId={p} iconSize={14} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {authenticated && umbraStatus === "unregistered" && (
-            <p className="text-xs text-[#121212]/50 mt-2">
-              Enable Umbra in your{" "}
-              <a
-                href="/p"
-                className="underline underline-offset-2 decoration-dashed hover:text-[#121212]"
-              >
-                profile
-              </a>{" "}
-              to fulfill via Umbra.
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Pay Button (for payers) or Cancel Button (for requestor) */}
       {pageState === "ready" && !isRequestor && (
         <motion.button
@@ -606,7 +540,7 @@ export default function RequestPage({
           whileTap={{ scale: 0.98 }}
           className="w-full max-w-[320px] h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
         >
-          Fulfill
+          Pay
         </motion.button>
       )}
 
@@ -636,6 +570,28 @@ export default function RequestPage({
           />
         </motion.button>
       )}
+
+      {/* Protocol picker — same Modal frame as the rest of the app. The
+          relative, bounded wrapper (with negative margins to cancel Modal's
+          padding) gives the sidebar's `absolute inset-0` a box to fill, and
+          slideIn=false lets the modal do the entrance animation. */}
+      <Modal isOpen={pickerOpen} onClose={() => setPickerOpen(false)}>
+        <div className="relative h-[60vh] max-h-[500px] -mx-6 -mb-8 -mt-1">
+          <ProtocolSidebar
+            slideIn={false}
+            effectiveProvider={effectiveProvider}
+            onSelect={(p) => {
+              setProvider(p);
+              setPickerOpen(false);
+            }}
+            onClose={() => setPickerOpen(false)}
+            amount={requestData.amount}
+            flow="fulfill"
+            umbraStatus={umbraStatus}
+            recipientUmbraStatus={requesterUmbraStatus}
+          />
+        </div>
+      </Modal>
     </main>
   );
 }
