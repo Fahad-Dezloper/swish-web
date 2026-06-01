@@ -261,7 +261,9 @@ export function SendModal({
       // PC and MB go through the server-prepare/submit flow with their
       // own session messages.
       if (dispatchProvider === "umbra") {
-        const baseUnits = BigInt(Math.round(numAmount * 1_000_000));
+        // Floor, never round up: rounding the 7th decimal up would ask
+        // for one more micro-USDC than the user holds and fail the send.
+        const baseUnits = BigInt(Math.floor(numAmount * 1_000_000));
         await umbraSend({
           receiverAddress,
           amountBaseUnits: baseUnits,
@@ -276,39 +278,20 @@ export function SendModal({
         if (!session) {
           throw new Error("Signature required to continue");
         }
-        try {
-          await send({
-            receiverAddress,
-            amount: numAmount,
-            token: "USDC",
-            signature: session.signature,
-            senderPublicKey: session.address,
-            // Pass the *resolved* providerId so the server validates
-            // against the matching session message and dispatches to the
-            // right provider — even when the user picked Auto.
-            providerId: dispatchProvider,
-          });
-        } catch (mbErr: any) {
-          // Auto-fallback: when picker is Auto and MB dispatch fails
-          // (catches partial outages /health doesn't see), retry once
-          // with PC. Costs a PC session-sig prompt if not cached.
-          if (provider === "auto" && dispatchProvider === "magicblock-per") {
-            console.warn("MB failed under Auto, falling back to PC:", mbErr);
-            const pcSession = await getSignature();
-            if (!pcSession) throw mbErr;
-            dispatchProvider = "privacy-cash";
-            await send({
-              receiverAddress,
-              amount: numAmount,
-              token: "USDC",
-              signature: pcSession.signature,
-              senderPublicKey: pcSession.address,
-              providerId: "privacy-cash",
-            });
-          } else {
-            throw mbErr;
-          }
-        }
+        // No silent fallback: if the resolved provider fails, surface the
+        // error and let the user retry. Auto-switching to another protocol
+        // changes the fee the user agreed to without consent.
+        await send({
+          receiverAddress,
+          amount: numAmount,
+          token: "USDC",
+          signature: session.signature,
+          senderPublicKey: session.address,
+          // Pass the *resolved* providerId so the server validates
+          // against the matching session message and dispatches to the
+          // right provider — even when the user picked Auto.
+          providerId: dispatchProvider,
+        });
       }
       setState("success");
     } catch (error: any) {

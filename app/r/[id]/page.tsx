@@ -200,7 +200,7 @@ export default function RequestPage({
       if (dispatchProvider === "umbra") {
         // Client-side Umbra fulfill: 3 wallet prompts, requester must be
         // registered. Fail-fast inside the hook if not.
-        const baseUnits = BigInt(Math.round(requestData.amount * 1_000_000));
+        const baseUnits = BigInt(Math.floor(requestData.amount * 1_000_000));
         await umbraFulfill({
           activityId: id,
           receiverAddress: requestData.receiverAddress,
