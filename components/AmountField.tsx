@@ -49,7 +49,7 @@ export function AmountField({
         <button
           type="button"
           onClick={onMax}
-          className="shrink-0 bg-[#121212] text-[#fafafa] rounded-full px-4 h-10 text-sm font-bold active:scale-95 transition-transform"
+          className="shrink-0 bg-[#121212] text-[#fafafa] rounded-full px-4 h-10 text-sm font-bold outline-none active:scale-95 transition-transform"
         >
           MAX
         </button>

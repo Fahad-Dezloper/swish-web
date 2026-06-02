@@ -58,7 +58,7 @@ export function NumberPad({ onNumberPress, onBackspace }: NumberPadProps) {
         <button
           key={num}
           onClick={() => onNumberPress(num)}
-          className={`h-14 text-2xl font-medium text-[#121212] rounded-xl transition-colors hover:bg-[#121212]/5 ${
+          className={`h-14 text-2xl font-medium text-[#121212] rounded-xl outline-none transition-colors hover:bg-[#121212]/5 ${
             activeKey === num ? "bg-[#121212]/10" : "active:bg-[#121212]/10"
           }`}
         >
@@ -67,7 +67,7 @@ export function NumberPad({ onNumberPress, onBackspace }: NumberPadProps) {
       ))}
       <button
         onClick={onBackspace}
-        className={`h-14 flex items-center justify-center rounded-xl transition-colors hover:bg-[#121212]/5 ${
+        className={`h-14 flex items-center justify-center rounded-xl outline-none transition-colors hover:bg-[#121212]/5 ${
           activeKey === "backspace" ? "bg-[#121212]/10" : "active:bg-[#121212]/10"
         }`}
       >
