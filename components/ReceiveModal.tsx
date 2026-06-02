@@ -7,7 +7,7 @@ import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { NumberPad } from "./NumberPad";
 import { AmountField } from "./AmountField";
-import { formatNumber } from "@/utils";
+import { formatNumber, appendAmountKey, decimalsForAsset } from "@/utils";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
 import {
   useSessionSignature,
@@ -43,13 +43,8 @@ export function ReceiveModal({
   const hasValidAmount = numAmount > 0;
 
   const handleNumberPress = (num: string) => {
-    if (amount === "0" && num !== ".") {
-      setAmount(num);
-    } else if (num === "." && amount.includes(".")) {
-      return;
-    } else {
-      setAmount(amount + num);
-    }
+    // USDC for now; pass the selected asset's symbol once it's selectable.
+    setAmount((prev) => appendAmountKey(prev, num, decimalsForAsset("USDC")));
   };
 
   const handleBackspace = () => {

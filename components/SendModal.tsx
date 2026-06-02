@@ -12,7 +12,7 @@ import { AmountField } from "./AmountField";
 import { SendClaimContent } from "./SendClaimContent";
 import { ProtocolBadge } from "./ProtocolBadge";
 import { ProtocolSidebar } from "./ProtocolSidebar";
-import { formatNumber } from "@/utils";
+import { formatNumber, appendAmountKey, decimalsForAsset } from "@/utils";
 import { useSendTransaction } from "@/hooks/useSendTransaction";
 import { useUmbraSend } from "@/hooks/useUmbraSend";
 import { useUmbraStatus } from "@/hooks/useUmbraStatus";
@@ -89,13 +89,8 @@ export function SendModal({
   const exceedsBalance = balance !== null && numAmount > balance;
 
   const handleNumberPress = (num: string) => {
-    if (amount === "0" && num !== ".") {
-      setAmount(num);
-    } else if (num === "." && amount.includes(".")) {
-      return;
-    } else {
-      setAmount(amount + num);
-    }
+    // USDC for now; pass the selected asset's symbol once it's selectable.
+    setAmount((prev) => appendAmountKey(prev, num, decimalsForAsset("USDC")));
   };
 
   const handleBackspace = () => {
