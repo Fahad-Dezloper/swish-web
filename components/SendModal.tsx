@@ -7,6 +7,9 @@ import { PublicKey } from "@solana/web3.js";
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { QRScanner } from "./QRScanner";
+import { NumberPad } from "./NumberPad";
+import { AmountField } from "./AmountField";
+import { SendClaimContent } from "./SendClaimContent";
 import { ProtocolBadge } from "./ProtocolBadge";
 import { ProtocolSidebar } from "./ProtocolSidebar";
 import { formatNumber } from "@/utils";
@@ -34,22 +37,28 @@ const SEND_PROVIDER_POOL: ProviderId[] = [
 interface SendModalProps {
   isOpen: boolean;
   onClose: () => void;
-  amount: string;
-  onSendViaClaim: () => void;
+  balance: number | null;
   getSignature: GetSessionSignature;
 }
 
 type ModalState = "input" | "loading" | "success" | "error";
+// Within the "input" state, the user first enters an amount, then fills
+// in the recipient + routing details.
+type EntryStep = "amount" | "form";
+// A direct send, or generating a claim link — both share the keypad.
+type SendMode = "send" | "claim";
 type RecipientType = "wallet" | "x";
 type ProviderChoice = "auto" | "privacy-cash" | "magicblock-per" | "umbra";
 
 export function SendModal({
   isOpen,
   onClose,
-  amount,
-  onSendViaClaim,
+  balance,
   getSignature,
 }: SendModalProps) {
+  const [amount, setAmount] = useState("0");
+  const [entryStep, setEntryStep] = useState<EntryStep>("amount");
+  const [mode, setMode] = useState<SendMode>("send");
   const [walletAddress, setWalletAddress] = useState("");
   const [xHandle, setXHandle] = useState("");
   const [recipientType, setRecipientType] = useState<RecipientType>("wallet");
@@ -76,6 +85,26 @@ export function SendModal({
   } = useSessionSignature("magicblock-per");
 
   const numAmount = parseFloat(amount) || 0;
+  const hasValidAmount = numAmount > 0;
+  const exceedsBalance = balance !== null && numAmount > balance;
+
+  const handleNumberPress = (num: string) => {
+    if (amount === "0" && num !== ".") {
+      setAmount(num);
+    } else if (num === "." && amount.includes(".")) {
+      return;
+    } else {
+      setAmount(amount + num);
+    }
+  };
+
+  const handleBackspace = () => {
+    if (amount.length === 1) {
+      setAmount("0");
+    } else {
+      setAmount(amount.slice(0, -1));
+    }
+  };
 
   const isValidAddress = useMemo(() => {
     if (!walletAddress) return false;
@@ -303,6 +332,9 @@ export function SendModal({
 
   const handleClose = () => {
     setState("input");
+    setAmount("0");
+    setEntryStep("amount");
+    setMode("send");
     setWalletAddress("");
     setXHandle("");
     setRecipientType("wallet");
@@ -334,6 +366,15 @@ export function SendModal({
   return (
     <>
       <Modal isOpen={isOpen} onClose={handleClose}>
+        {mode === "claim" ? (
+          // Claim-link creation lives in this same modal, reusing `amount`.
+          <SendClaimContent
+            amount={amount}
+            getSignature={getSignature}
+            onBack={() => setMode("send")}
+          />
+        ) : (
+        <>
         {/* Header */}
         <div className="flex items-center gap-2 mb-6">
           <Image
@@ -347,13 +388,77 @@ export function SendModal({
         </div>
 
         <AnimatePresence mode="wait">
-          {state === "input" && (
+          {state === "input" && entryStep === "amount" && (
             <motion.div
-              key="input"
+              key="amount"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
+              {/* Amount entry */}
+              <div className="mb-3">
+                <AmountField
+                  amount={amount}
+                  assetSymbol="USDC"
+                  onMax={
+                    balance !== null && balance > 0
+                      ? () => setAmount(String(balance))
+                      : undefined
+                  }
+                />
+              </div>
+              <p className="text-sm text-center mb-6 h-5">
+                {exceedsBalance ? (
+                  <span className="text-[#CB0000]">Exceeds your balance</span>
+                ) : balance !== null ? (
+                  <span className="text-[#121212]/50">
+                    {formatNumber(balance)} USDC available
+                  </span>
+                ) : (
+                  " "
+                )}
+              </p>
+
+              <div className="mb-6 w-full flex justify-center">
+                <NumberPad
+                  onNumberPress={handleNumberPress}
+                  onBackspace={handleBackspace}
+                />
+              </div>
+
+              <motion.button
+                onClick={() => setEntryStep("form")}
+                disabled={!hasValidAmount || exceedsBalance}
+                whileTap={{ scale: 0.98 }}
+                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              >
+                Continue
+              </motion.button>
+            </motion.div>
+          )}
+
+          {state === "input" && entryStep === "form" && (
+            <motion.div
+              key="form"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              {/* Back to amount entry */}
+              <button
+                onClick={() => setEntryStep("amount")}
+                className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
+              >
+                <Image
+                  src="/assets/chevron-down-icon.svg"
+                  alt=""
+                  width={10}
+                  height={10}
+                  className="rotate-90"
+                />
+                Edit amount
+              </button>
+
               {/* Recipient Type Toggle */}
               <div className="flex mb-4 bg-[#121212]/5 rounded-full p-1">
                 <button
@@ -537,12 +642,10 @@ export function SendModal({
                 {isResolvingX ? "Resolving..." : "Proceed"}
               </motion.button>
 
-              {/* Generate Claim Link - invisible for X sends */}
+              {/* Generate Claim Link - continues in this same modal (claim
+                  mode); invisible for X sends */}
               <button
-                onClick={() => {
-                  handleClose();
-                  onSendViaClaim();
-                }}
+                onClick={() => setMode("claim")}
                 disabled={recipientType === "x"}
                 className={`w-full mt-4 text-[#121212]/70 text-sm underline underline-offset-4 decoration-dashed hover:text-[#121212] transition-colors ${recipientType === "x" ? "invisible pointer-events-none" : ""}`}
               >
@@ -674,6 +777,8 @@ export function SendModal({
             />
           )}
         </AnimatePresence>
+        </>
+        )}
       </Modal>
 
       {/* QR Scanner Modal */}
