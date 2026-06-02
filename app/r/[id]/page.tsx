@@ -548,7 +548,11 @@ export default function RequestPage({
         <motion.button
           onClick={handlePay}
           disabled={
-            (provider === "auto" && (noAutoTarget || autoUnavailable)) ||
+            // Wait for the route to resolve before allowing Pay — but only
+            // once connected, so a logged-out visitor can still tap to log in.
+            (authenticated &&
+              provider === "auto" &&
+              (noAutoTarget || autoUnavailable || !autoResolved)) ||
             insufficientBalance
           }
           whileTap={{ scale: 0.98 }}

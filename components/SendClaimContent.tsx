@@ -278,7 +278,10 @@ export function SendClaimContent({
             {/* Proceed Button */}
             <motion.button
               onClick={handleProceed}
-              disabled={provider === "auto" && (noAutoTarget || autoUnavailable)}
+              disabled={
+                provider === "auto" &&
+                (noAutoTarget || autoUnavailable || !autoResolved)
+              }
               whileTap={{ scale: 0.98 }}
               className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
