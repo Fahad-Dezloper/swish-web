@@ -8,7 +8,6 @@ import {
 import {
   getAssociatedTokenAddress,
   createTransferInstruction,
-  createAssociatedTokenAccountInstruction,
   getAccount,
   TokenAccountNotFoundError,
 } from "@solana/spl-token";
@@ -19,6 +18,9 @@ import { loadSponsorWallet } from "@/lib/sponsor/sponsorWallet";
 
 const SESSION_MESSAGE = "Privacy Money account sign in";
 const USDC_DECIMALS = 6;
+// Floor so we never spend more in network fees than the withdrawal is worth
+// (the dust below this was the vehicle for the sponsor-rent drain).
+const MIN_WITHDRAW_USDC = 0.1;
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,6 +61,13 @@ export async function POST(request: NextRequest) {
     if (amount <= 0) {
       return NextResponse.json(
         { error: "Amount must be greater than zero" },
+        { status: 400 }
+      );
+    }
+
+    if (amount < MIN_WITHDRAW_USDC) {
+      return NextResponse.json(
+        { error: "Minimum withdrawal is $0.10.", code: "BELOW_MINIMUM" },
         { status: 400 }
       );
     }
@@ -123,22 +132,24 @@ export async function POST(request: NextRequest) {
     // Build instructions
     const instructions = [];
 
-    // Create receiver ATA if needed
+    // Recipient must ALREADY have a USDC account. We do NOT open one on the
+    // sponsor's dime — that ~0.002 SOL rent is refundable, and dust withdraws
+    // to fresh accounts were being used to farm it (open on us, close it,
+    // pocket the SOL). Refuse instead of creating it.
     try {
       await getAccount(connection, receiverTokenAccount);
     } catch (error) {
       if (error instanceof TokenAccountNotFoundError) {
-        instructions.push(
-          createAssociatedTokenAccountInstruction(
-            sponsorKeypair.publicKey,
-            receiverTokenAccount,
-            receiverPubKey,
-            mintAddress
-          )
+        return NextResponse.json(
+          {
+            error:
+              "This address can't receive USDC — it has no USDC account yet. Send to a wallet that already holds USDC.",
+            code: "RECIPIENT_NO_USDC_ACCOUNT",
+          },
+          { status: 400 }
         );
-      } else {
-        throw error;
       }
+      throw error;
     }
 
     // Transfer USDC
