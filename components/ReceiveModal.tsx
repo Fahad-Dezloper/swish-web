@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
-import { formatNumber } from "@/utils";
+import { NumberPad } from "./NumberPad";
+import { AmountField } from "./AmountField";
+import { formatNumber, appendAmountKey, decimalsForAsset } from "@/utils";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
 import {
   useSessionSignature,
@@ -15,27 +17,43 @@ import {
 interface ReceiveModalProps {
   isOpen: boolean;
   onClose: () => void;
-  amount: string;
   getSignature: GetSessionSignature;
 }
 
 type ModalState = "input" | "loading" | "success" | "error";
+// Within "input", the user enters an amount first, then the message.
+type EntryStep = "amount" | "form";
 
 export function ReceiveModal({
   isOpen,
   onClose,
-  amount,
 }: ReceiveModalProps) {
   // Request creation is protocol-agnostic — sign with the Swish-scoped
   // request session sig instead of any protocol's text. The parent prop
   // `getSignature` (PC by default) is ignored here.
   const { getSignature } = useSessionSignature("request");
+  const [amount, setAmount] = useState("0");
+  const [entryStep, setEntryStep] = useState<EntryStep>("amount");
   const [message, setMessage] = useState("");
   const [state, setState] = useState<ModalState>("input");
   const [requestLink, setRequestLink] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const numAmount = parseFloat(amount) || 0;
+  const hasValidAmount = numAmount > 0;
+
+  const handleNumberPress = (num: string) => {
+    // USDC for now; pass the selected asset's symbol once it's selectable.
+    setAmount((prev) => appendAmountKey(prev, num, decimalsForAsset("USDC")));
+  };
+
+  const handleBackspace = () => {
+    if (amount.length === 1) {
+      setAmount("0");
+    } else {
+      setAmount(amount.slice(0, -1));
+    }
+  };
   // Requester doesn't pick a protocol — the payer picks at fulfill time.
   // Show worst-case fee (PC, the auto-router default). Other protocols
   // may charge less (MB ~0, Umbra 0).
@@ -99,6 +117,8 @@ export function ReceiveModal({
 
   const handleClose = () => {
     setState("input");
+    setAmount("0");
+    setEntryStep("amount");
     setMessage("");
     setRequestLink("");
     setErrorMessage(null);
@@ -120,13 +140,58 @@ export function ReceiveModal({
       </div>
 
       <AnimatePresence mode="wait">
-        {state === "input" && (
+        {state === "input" && entryStep === "amount" && (
           <motion.div
-            key="input"
+            key="amount"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
+            {/* Amount entry */}
+            <div className="mb-6">
+              <AmountField amount={amount} assetSymbol="USDC" />
+            </div>
+
+            <div className="mb-6 w-full flex justify-center">
+              <NumberPad
+                onNumberPress={handleNumberPress}
+                onBackspace={handleBackspace}
+              />
+            </div>
+
+            <motion.button
+              onClick={() => setEntryStep("form")}
+              disabled={!hasValidAmount}
+              whileTap={{ scale: 0.98 }}
+              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+            >
+              Continue
+            </motion.button>
+          </motion.div>
+        )}
+
+        {state === "input" && entryStep === "form" && (
+          <motion.div
+            key="form"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            {/* Back to amount entry */}
+            <button
+              onClick={() => setEntryStep("amount")}
+              className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
+            >
+              <Image
+                src="/assets/chevron-down-icon.svg"
+                alt=""
+                width={10}
+                height={10}
+                className="rotate-90"
+              />
+              Edit amount
+            </button>
+
             {/* Message Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-2 block">

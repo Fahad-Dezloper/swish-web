@@ -1,306 +1,231 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import Image from "next/image";
+import Link from "next/link";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 import { useUserRegistration } from "@/hooks/useUserRegistration";
-import { formatNumber } from "@/utils";
+import { useUserActivity } from "@/hooks/useUserActivity";
+import { useDelayedUnmount } from "@/hooks/useDelayedUnmount";
 import {
   ActionButton,
-  NumberPad,
+  ActivityItem,
+  AccountChip,
+  Spinner,
   SendModal,
   ReceiveModal,
-  SendClaimModal,
 } from "@/components";
 
-type ModalType = "send" | "receive" | "sendClaim" | null;
+type ModalType = "send" | "receive" | null;
 
 export default function Home() {
-  const { login, authenticated, logout, user } = usePrivy();
+  const { ready, login, authenticated } = usePrivy();
   const { walletAddress, getSignature } = useSessionSignature();
   useUserRegistration();
+  const { balance, refetch: refetchUSDCBalance } =
+    useUSDCBalance(walletAddress);
   const {
-    balance,
-    isLoading: balanceLoading,
-    refetch: refetchUSDCBalance,
-  } = useUSDCBalance(walletAddress);
-  const [amount, setAmount] = useState("0");
+    activities,
+    isLoading: activityLoading,
+    refetch: refetchActivity,
+  } = useUserActivity(walletAddress);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const mountedModal = useDelayedUnmount(activeModal, 350);
+  // Gate slide/fade animations until Privy resolves, so a logged-in user
+  // doesn't see the intro→wallet slide play on every page load.
+  const [animate, setAnimate] = useState(false);
+  // FLIP refs: Framer's `layout` doesn't fire through the centered grandparent
+  // (verified — it teleports), so we slide the block by measuring its real
+  // before/after position and easing the exact delta via the Web Animations API.
+  const mainRef = useRef<HTMLElement>(null);
+  const prevMainTop = useRef<number | null>(null);
+  const prevAuthed = useRef(authenticated);
 
-  const isXUser = !!user?.twitter;
-  const twitterHandle = user?.twitter?.username;
-
-  const numAmount = parseFloat(amount) || 0;
-  const hasValidAmount = numAmount > 0;
-  const exceedsBalance = balance !== null && numAmount > balance;
-
-  // Close dropdown on outside click
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setShowDropdown(false);
+    // One-time once Privy resolves: enables the connect/disconnect slide so
+    // the initial load snaps into place and only real transitions animate.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (ready) setAnimate(true);
+  }, [ready]);
+
+  // FLIP slide on connect/disconnect. Runs after every render to keep the
+  // last position fresh, but only animates when `authenticated` actually
+  // flipped (not on balance/activity re-renders).
+  useLayoutEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const newTop = el.getBoundingClientRect().top;
+    if (
+      animate &&
+      prevAuthed.current !== authenticated &&
+      prevMainTop.current !== null
+    ) {
+      const delta = prevMainTop.current - newTop;
+      if (Math.abs(delta) > 1) {
+        el.animate(
+          [
+            { transform: `translateY(${delta}px)` },
+            { transform: "translateY(0px)" },
+          ],
+          { duration: 400, easing: "cubic-bezier(0.22,1,0.36,1)" }
+        );
       }
-    };
-    if (showDropdown) {
-      document.addEventListener("mousedown", handleClickOutside);
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showDropdown]);
-
-  const handleNumberPress = (num: string) => {
-    if (amount === "0" && num !== ".") {
-      setAmount(num);
-    } else if (num === "." && amount.includes(".")) {
-      return;
-    } else {
-      setAmount(amount + num);
-    }
-  };
-
-  const handleBackspace = () => {
-    if (amount.length === 1) {
-      setAmount("0");
-    } else {
-      setAmount(amount.slice(0, -1));
-    }
-  };
-
-  const handleActionClick = (action: "send" | "receive") => {
-    if (!authenticated) {
-      login();
-      return;
-    }
-
-    if (!hasValidAmount) {
-      return;
-    }
-
-    if (action === "send" && exceedsBalance) {
-      return;
-    }
-
-    setActiveModal(action);
-  };
+    prevMainTop.current = newTop;
+    prevAuthed.current = authenticated;
+  });
 
   const closeModal = () => {
     refetchUSDCBalance();
+    refetchActivity();
     setActiveModal(null);
   };
 
-  const handleCopyAddress = async () => {
-    if (!walletAddress) return;
-    try {
-      await navigator.clipboard.writeText(walletAddress);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
+  const recentActivities = activities.slice(0, 4);
 
-  const formatAddr = (addr: string) => {
-    if (addr.length <= 10) return addr;
-    return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
-  };
-
-  const getBalanceDisplay = useCallback(() => {
-    if (!authenticated) return "Connect Wallet";
-    if (balanceLoading || !walletAddress) return "Loading...";
-    if (balance !== null) return `${formatNumber(balance)} USDC`;
-    return "0 USDC";
-  }, [authenticated, balanceLoading, balance, walletAddress]);
-
-  const handleBalanceClick = () => {
-    if (!authenticated) {
-      login();
-      return;
-    }
-    setShowDropdown((prev) => !prev);
-  };
+  // Shared easing for the headline slide + content fade so they feel like
+  // one motion.
+  const TRANSITION = { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const };
 
   return (
     <>
-      <main className="flex flex-col items-center p-4 w-full">
-        {/* Amount Display */}
-        <div className="flex flex-col items-center mb-8 w-full max-w-full">
-          <div className="w-full max-w-[320px] overflow-x-auto scrollbar-hide">
-            <input
-              type="text"
-              value={`$${amount}`}
-              readOnly
-              disabled
-              className="w-full text-6xl font-light text-[#121212] bg-transparent border-none outline-none text-center cursor-default select-none caret-transparent"
-            />
-          </div>
+      {/* FLIP-slid via the useLayoutEffect above (Framer `layout` teleports
+          through the centered grandparent). The whole block glides; content
+          crossfades. */}
+      <main
+        ref={mainRef}
+        className="relative flex flex-col items-center p-4 w-full"
+      >
+        {/* Persistent hero — the product in three verbs. */}
+        <h1 className="text-3xl font-semibold text-[#121212] text-center leading-tight mb-8">
+          Send. Request. Claim.
+          <br />
+          <span className="text-[#121212]/40">Privately.</span>
+        </h1>
 
-          {/* Balance / Dropdown */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={handleBalanceClick}
-              className={`mt-2 flex items-center gap-1.5 text-sm text-[#121212]/50 hover:text-[#121212]/70 transition-colors ${!authenticated ? "underline underline-offset-4 decoration-dashed" : ""}`}
+        {ready && (
+          <AnimatePresence mode="popLayout" initial={false}>
+            {!authenticated ? (
+              // Empty / not-connected state: the whole intro.
+              <motion.div
+                key="intro"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={TRANSITION}
+                className="w-full max-w-[320px] flex flex-col items-center"
+              >
+              <p className="text-sm text-[#121212]/50 mb-8 text-center leading-relaxed">
+                <span className="text-[#121212]/60 font-medium">
+                  Private payments
+                </span>{" "}
+                on Solana.
+                <br />
+                Swish picks the best route.
+              </p>
+              <motion.button
+                onClick={login}
+                whileTap={{ scale: 0.98 }}
+                className="w-full max-w-[280px] h-11 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              >
+                Get started
+              </motion.button>
+            </motion.div>
+          ) : (
+            // Connected: the action items fade in.
+            <motion.div
+              key="wallet"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={TRANSITION}
+              className="w-full max-w-[320px] flex flex-col items-center"
             >
-              {getBalanceDisplay()}
-              {authenticated && (
-                <Image
-                  src="/assets/chevron-down-icon.svg"
-                  alt=""
-                  width={10}
-                  height={10}
-                  className={`transition-transform ${showDropdown ? "rotate-180" : ""}`}
-                />
-              )}
-            </button>
+              {/* Account — balance + assets + wallet info */}
+              <div className="w-full mb-8">
+                <AccountChip />
+              </div>
 
-            <AnimatePresence>
-              {showDropdown && authenticated && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-[#fafafa] border border-[#121212]/10 rounded-2xl shadow-lg z-50 overflow-hidden"
-                >
-                  {/* Wallet Address */}
-                  <button
-                    onClick={copied ? undefined : handleCopyAddress}
-                    className={`w-full flex items-center gap-2.5 px-4 py-3 transition-colors ${copied ? "pointer-events-none" : "hover:bg-[#121212]/5"}`}
-                  >
-                    <Image
-                      src="/assets/sol-icon.svg"
-                      alt=""
-                      width={16}
-                      height={16}
-                    />
-                    <span className="text-[#121212] text-md flex-1 text-left">
-                      {walletAddress ? formatAddr(walletAddress) : ""}
-                    </span>
-                    <Image
-                      src={copied ? "/assets/success-alt.svg" : "/assets/copy-icon.svg"}
-                      alt=""
-                      width={copied ? 16 : 14}
-                      height={copied ? 8 : 14}
-                    />
-                  </button>
+              {/* Action Buttons */}
+              <div className="w-full flex gap-4 mb-10">
+                <div className="flex-1">
+                  <ActionButton
+                    variant="send"
+                    onClick={() => setActiveModal("send")}
+                  />
+                </div>
+                <div className="flex-1">
+                  <ActionButton
+                    variant="receive"
+                    onClick={() => setActiveModal("receive")}
+                  />
+                </div>
+              </div>
 
-                  {/* X Handle */}
-                  {isXUser && twitterHandle && (
-                    <a
-                      href={`https://x.com/${twitterHandle}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#121212]/5 transition-colors"
+              {/* Recent Activity */}
+              <div className="w-full">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[#121212] text-sm font-medium">
+                    Recent activity
+                  </span>
+                  {recentActivities.length > 0 && (
+                    <Link
+                      href="/p?tab=activity"
+                      className="text-[#121212]/50 text-xs hover:text-[#121212] transition-colors"
                     >
-                      <Image
-                        src="/assets/x-icon.svg"
-                        alt=""
-                        width={16}
-                        height={16}
-                      />
-                      <span className="text-[#121212]/60 text-sm">
-                        @{twitterHandle}
-                      </span>
-                    </a>
+                      See all
+                    </Link>
                   )}
+                </div>
 
-                  {/* Logout */}
-                  <button
-                    onClick={() => {
-                      setShowDropdown(false);
-                      logout();
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#121212]/5 transition-colors"
-                  >
-                    <Image
-                      src="/assets/logout-icon.svg"
-                      alt=""
-                      width={16}
-                      height={16}
-                    />
-                    <span className="text-[#121212] text-sm">Logout</span>
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-
-        {/* Number Pad */}
-        <div className="mb-8 w-full flex justify-center">
-          <NumberPad
-            onNumberPress={handleNumberPress}
-            onBackspace={handleBackspace}
-          />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-4 w-full">
-          <motion.div
-            className="flex-1"
-            animate={
-              authenticated && (!hasValidAmount || exceedsBalance)
-                ? { x: [0, -4, 4, -4, 4, 0] }
-                : {}
-            }
-            transition={{ duration: 0.4 }}
-            key={`send-${authenticated && (!hasValidAmount || exceedsBalance) ? "shake" : "idle"}`}
-          >
-            <ActionButton
-              variant="send"
-              onClick={() => handleActionClick("send")}
-              disabled={authenticated && (!hasValidAmount || exceedsBalance)}
-            />
-          </motion.div>
-          <motion.div
-            className="flex-1"
-            animate={
-              authenticated && !hasValidAmount
-                ? { x: [0, -4, 4, -4, 4, 0] }
-                : {}
-            }
-            transition={{ duration: 0.4 }}
-            key={`receive-${authenticated && !hasValidAmount ? "shake" : "idle"}`}
-          >
-            <ActionButton
-              variant="receive"
-              onClick={() => handleActionClick("receive")}
-              disabled={authenticated && !hasValidAmount}
-            />
-          </motion.div>
-        </div>
+                {/* Reserved height so the spinner→rows swap doesn't change
+                    the block's height and re-target the headline mid-slide. */}
+                <div className="min-h-[184px]">
+                  {activityLoading && recentActivities.length === 0 ? (
+                    <div className="flex justify-center py-8">
+                      <Spinner size={24} color="#121212" />
+                    </div>
+                  ) : recentActivities.length === 0 ? (
+                    <p className="text-[#121212]/50 text-sm text-center py-8">
+                      No activity yet
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentActivities.map((activity) => (
+                        <ActivityItem
+                          key={activity.id}
+                          activity={activity}
+                          walletAddress={walletAddress}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+        )}
       </main>
 
-      {/* Modals - only render when active to avoid multiple hook instances */}
-      {activeModal === "send" && (
+      {/* Modals - only render when active to avoid multiple hook instances.
+          `mountedModal` lingers ~350ms past close so Modal's exit animation
+          can play before the component is unmounted. */}
+      {mountedModal === "send" && (
         <SendModal
-          isOpen={true}
+          isOpen={activeModal === "send"}
           onClose={closeModal}
-          amount={amount}
-          onSendViaClaim={() => setActiveModal("sendClaim")}
+          balance={balance}
           getSignature={getSignature}
         />
       )}
 
-      {activeModal === "receive" && (
+      {mountedModal === "receive" && (
         <ReceiveModal
-          isOpen={true}
+          isOpen={activeModal === "receive"}
           onClose={closeModal}
-          amount={amount}
-          getSignature={getSignature}
-        />
-      )}
-
-      {activeModal === "sendClaim" && (
-        <SendClaimModal
-          isOpen={true}
-          onClose={closeModal}
-          amount={amount}
           getSignature={getSignature}
         />
       )}

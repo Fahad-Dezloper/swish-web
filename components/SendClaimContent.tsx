@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
-import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { ProtocolBadge } from "./ProtocolBadge";
+import { ProtocolSidebar } from "./ProtocolSidebar";
 import { formatNumber } from "@/utils";
 import { useSendClaimTransaction } from "@/hooks/useSendClaimTransaction";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
@@ -15,49 +15,50 @@ import {
   type GetSessionSignature,
 } from "@/hooks/useSessionSignature";
 import type { ProviderId } from "@/lib/providers/types";
-import {
-  areAllProvidersDisabled,
-  isProviderDisabled,
-} from "@/lib/providers/maintenance";
+import { areAllProvidersDisabled } from "@/lib/providers/maintenance";
 
 const SC_PROVIDER_POOL: ProviderId[] = ["magicblock-per", "privacy-cash"];
 
-interface SendClaimModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface SendClaimContentProps {
+  /** Amount entered on the shared keypad in SendModal. */
   amount: string;
   getSignature: GetSessionSignature;
+  /** Return to the Send form (same modal). */
+  onBack: () => void;
 }
 
-type ModalState = "input" | "loading" | "success" | "error";
+type ContentState = "input" | "loading" | "success" | "error";
 // Umbra hidden from SC picker for the Frontier demo (Arcium MPC callbacks
 // for `RegisterUserForAnonymousUsageV11` are unreliable, blocking the
 // burner registration step). Backend code stays — re-enable by adding
 // "umbra" back here + restoring the branches below.
 type ProviderChoice = "auto" | "privacy-cash" | "magicblock-per";
 
-export function SendClaimModal({
-  isOpen,
-  onClose,
+/**
+ * Claim-link creation, rendered INSIDE SendModal's Modal (no own Modal
+ * shell) — the "Generate a claim link" button flips SendModal into this
+ * mode, reusing the amount already on the keypad.
+ */
+export function SendClaimContent({
   amount,
   getSignature,
-}: SendClaimModalProps) {
+  onBack,
+}: SendClaimContentProps) {
   const [message, setMessage] = useState("");
-  const [state, setState] = useState<ModalState>("input");
+  const [state, setState] = useState<ContentState>("input");
   const [claimLink, setClaimLink] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [provider, setProvider] = useState<ProviderChoice>("auto");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { sendClaim } = useSendClaimTransaction();
   // Each protocol's SC reclaim uses its own session message — the burner
   // privkey is encrypted with the sender's protocol-specific signature so
   // we must mint the right one when the user picks MB. PC's getSignature
   // is the parent prop fallback for "auto" and "privacy-cash".
-  const {
-    getSignature: getMbSessionSignature,
-    walletAddress: senderAddress,
-  } = useSessionSignature("magicblock-per");
+  const { getSignature: getMbSessionSignature, walletAddress: senderAddress } =
+    useSessionSignature("magicblock-per");
 
   const numAmount = parseFloat(amount) || 0;
 
@@ -96,7 +97,7 @@ export function SendClaimModal({
     // useAutoRoute hasn't returned yet (rare — auth + senderAddress
     // happen before the modal opens in practice), fall back to PC so
     // the user can proceed.
-    let dispatchProvider: ProviderId =
+    const dispatchProvider: ProviderId =
       provider === "auto"
         ? (autoResolved ?? "privacy-cash")
         : (provider as ProviderId);
@@ -118,43 +119,21 @@ export function SendClaimModal({
     setErrorMessage(null);
 
     try {
-      try {
-        const result = await sendClaim({
-          amount: numAmount,
-          token: "USDC",
-          message: message.trim() || undefined,
-          signature: session.signature,
-          senderPublicKey: session.address,
-          providerId: dispatchProvider,
-        });
+      // No silent fallback: if the resolved provider fails, surface the
+      // error and let the user retry. Auto-switching protocols changes the
+      // fee the user agreed to without consent.
+      const result = await sendClaim({
+        amount: numAmount,
+        token: "USDC",
+        message: message.trim() || undefined,
+        signature: session.signature,
+        senderPublicKey: session.address,
+        providerId: dispatchProvider,
+      });
 
-        setClaimLink(result.claimLink);
-        setPassphrase(result.passphrase);
-        setState("success");
-      } catch (mbErr: any) {
-        // Layer 2 fallback: under Auto, if MB dispatch fails (catches
-        // partial outages /health doesn't see), retry once with PC.
-        // Costs a PC session-sig prompt if not cached.
-        if (provider === "auto" && dispatchProvider === "magicblock-per") {
-          console.warn("MB SC failed under Auto, falling back to PC:", mbErr);
-          const pcSession = await getSignature();
-          if (!pcSession) throw mbErr;
-          dispatchProvider = "privacy-cash";
-          const result = await sendClaim({
-            amount: numAmount,
-            token: "USDC",
-            message: message.trim() || undefined,
-            signature: pcSession.signature,
-            senderPublicKey: pcSession.address,
-            providerId: "privacy-cash",
-          });
-          setClaimLink(result.claimLink);
-          setPassphrase(result.passphrase);
-          setState("success");
-        } else {
-          throw mbErr;
-        }
-      }
+      setClaimLink(result.claimLink);
+      setPassphrase(result.passphrase);
+      setState("success");
     } catch (error: any) {
       console.error("Send claim failed:", error);
       setErrorMessage(error.message || "Something went wrong");
@@ -164,23 +143,14 @@ export function SendClaimModal({
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${claimLink}\n\nPassphrase: ${passphrase}`);
+      await navigator.clipboard.writeText(
+        `${claimLink}\n\nPassphrase: ${passphrase}`
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
     }
-  };
-
-  const handleClose = () => {
-    setState("input");
-    setMessage("");
-    setClaimLink("");
-    setPassphrase("");
-    setErrorMessage(null);
-    setCopied(false);
-    setProvider("auto");
-    onClose();
   };
 
   const handleRetry = () => {
@@ -189,10 +159,16 @@ export function SendClaimModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose}>
+    <>
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
-        <Image src="/assets/send.svg" alt="Send" width={24} height={24} className="invert" />
+        <Image
+          src="/assets/send.svg"
+          alt="Send"
+          width={24}
+          height={24}
+          className="invert"
+        />
         <h2 className="text-2xl font-semibold text-[#121212]">Send via Claim</h2>
       </div>
 
@@ -204,6 +180,21 @@ export function SendClaimModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
+            {/* Back to the send form (claim link is a branch off it) */}
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
+            >
+              <Image
+                src="/assets/chevron-down-icon.svg"
+                alt=""
+                width={10}
+                height={10}
+                className="rotate-90"
+              />
+              Back to send
+            </button>
+
             {/* Message Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-2 block">
@@ -220,73 +211,11 @@ export function SendClaimModal({
                   placeholder=""
                   className="w-full h-12 px-4 pr-16 rounded-full border border-[#121212]/10 bg-transparent text-[#121212] outline-none focus:border-[#121212]/30 transition-colors"
                 />
-                <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-xs ${message.length >= 50 ? "text-red-500" : "text-[#121212]/30"}`}>
+                <span
+                  className={`absolute right-4 top-1/2 -translate-y-1/2 text-xs ${message.length >= 50 ? "text-red-500" : "text-[#121212]/30"}`}
+                >
                   {message.length}/50
                 </span>
-              </div>
-            </div>
-
-            {/* Privacy provider picker */}
-            <div className="mb-6">
-              <label className="text-sm text-[#121212]/50 mb-1 block">
-                Privacy protocol
-              </label>
-              <div className="space-y-1.5">
-                <button
-                  onClick={() => {
-                    if (noAutoTarget) return;
-                    setProvider("auto");
-                  }}
-                  disabled={noAutoTarget}
-                  title={
-                    noAutoTarget
-                      ? "All privacy protocols are temporarily unavailable"
-                      : undefined
-                  }
-                  className={`w-fit min-w-[72px] h-9 px-4 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                    provider === "auto"
-                      ? "bg-[#121212] text-[#fafafa]"
-                      : noAutoTarget
-                        ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                        : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                  }`}
-                >
-                  Auto
-                </button>
-                <div className="flex gap-1.5">
-                  {(
-                    ["magicblock-per", "privacy-cash"] as (
-                      | "magicblock-per"
-                      | "privacy-cash"
-                    )[]
-                  ).map((p) => {
-                    const maintenanceDisabled = isProviderDisabled(p);
-                    return (
-                      <button
-                        key={p}
-                        onClick={() => {
-                          if (maintenanceDisabled) return;
-                          setProvider(p);
-                        }}
-                        disabled={maintenanceDisabled}
-                        title={
-                          maintenanceDisabled
-                            ? "Temporarily unavailable (maintenance)"
-                            : undefined
-                        }
-                        className={`flex-1 min-w-[72px] h-9 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                          provider === p
-                            ? "bg-[#121212] text-[#fafafa]"
-                            : maintenanceDisabled
-                              ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                              : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                        }`}
-                      >
-                        <ProtocolBadge providerId={p} iconSize={14} />
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             </div>
 
@@ -294,12 +223,35 @@ export function SendClaimModal({
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
-                <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
+                <span className="text-[#121212]">
+                  {formatNumber(numAmount)} USDC
+                </span>
               </div>
-              {provider === "auto" && autoResolved && (
-                <div className="flex justify-between">
+              {(provider !== "auto" || autoResolved) && (
+                <div className="flex justify-between items-center">
                   <span className="text-[#121212]">Routed via</span>
-                  <ProtocolBadge providerId={autoResolved} />
+                  <button
+                    onClick={() => setPickerOpen(true)}
+                    className="flex items-center gap-1.5 text-[#121212] cursor-pointer hover:opacity-70 transition-opacity"
+                  >
+                    {provider === "auto" && autoResolved ? (
+                      <>
+                        <span className="text-[10px] font-medium text-[#121212]/60 uppercase tracking-wide px-1.5 py-0.5 rounded-md border border-[#121212]/15">
+                          Auto
+                        </span>
+                        <ProtocolBadge providerId={autoResolved} />
+                      </>
+                    ) : (
+                      <ProtocolBadge providerId={provider as ProviderId} />
+                    )}
+                    <Image
+                      src="/assets/chevron-down-icon.svg"
+                      alt=""
+                      width={10}
+                      height={10}
+                      className="-rotate-90"
+                    />
+                  </button>
                 </div>
               )}
               <div className="flex justify-between">
@@ -309,22 +261,31 @@ export function SendClaimModal({
                     ({feeBreakdown})
                   </span>
                 </div>
-                <span className="text-[#121212]">~{formatNumber(partnerFee)} USDC</span>
+                <span className="text-[#121212]">
+                  ~{formatNumber(partnerFee)} USDC
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#121212] font-semibold">They Receive</span>
-                <span className="text-[#121212] font-semibold">~{formatNumber(total)} USDC</span>
+                <span className="text-[#121212] font-semibold">
+                  They Receive
+                </span>
+                <span className="text-[#121212] font-semibold">
+                  ~{formatNumber(total)} USDC
+                </span>
               </div>
             </div>
 
             {/* Proceed Button */}
             <motion.button
               onClick={handleProceed}
-              disabled={provider === "auto" && (noAutoTarget || autoUnavailable)}
+              disabled={
+                provider === "auto" &&
+                (noAutoTarget || autoUnavailable || !autoResolved)
+              }
               whileTap={{ scale: 0.98 }}
               className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
-              Proceed
+              Create claim link
             </motion.button>
           </motion.div>
         )}
@@ -353,15 +314,23 @@ export function SendClaimModal({
             <div className="space-y-3 mb-6">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
-                <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
+                <span className="text-[#121212]">
+                  {formatNumber(numAmount)} USDC
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#121212]">Partner Fees</span>
-                <span className="text-[#121212]">~{formatNumber(partnerFee)} USDC</span>
+                <span className="text-[#121212]">
+                  ~{formatNumber(partnerFee)} USDC
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#121212] font-semibold">They Receive</span>
-                <span className="text-[#121212] font-semibold">~{formatNumber(total)} USDC</span>
+                <span className="text-[#121212] font-semibold">
+                  They Receive
+                </span>
+                <span className="text-[#121212] font-semibold">
+                  ~{formatNumber(total)} USDC
+                </span>
               </div>
             </div>
 
@@ -394,7 +363,9 @@ export function SendClaimModal({
             <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
               <span className="text-red-500 text-2xl">!</span>
             </div>
-            <p className="text-[#121212] font-medium mb-2">Failed to Generate Link</p>
+            <p className="text-[#121212] font-medium mb-2">
+              Failed to Generate Link
+            </p>
             <p className="text-[#121212]/60 text-sm text-center mb-6">
               {errorMessage || "Something went wrong"}
             </p>
@@ -408,6 +379,23 @@ export function SendClaimModal({
           </motion.div>
         )}
       </AnimatePresence>
-    </Modal>
+
+      <AnimatePresence>
+        {pickerOpen && (
+          <ProtocolSidebar
+            effectiveProvider={effectiveProvider}
+            onSelect={(p) => {
+              setProvider(p as ProviderChoice);
+              setPickerOpen(false);
+            }}
+            onClose={() => setPickerOpen(false)}
+            amount={numAmount}
+            flow="send_claim"
+            umbraStatus="idle"
+            recipientUmbraStatus="idle"
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
