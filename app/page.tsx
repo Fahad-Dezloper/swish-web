@@ -117,7 +117,7 @@ export default function Home() {
                 transition={TRANSITION}
                 className="w-full max-w-[320px] flex flex-col items-center"
               >
-              <p className="text-sm text-[#121212]/40 mb-8 text-center leading-relaxed">
+              <p className="text-sm text-[#121212]/50 mb-8 text-center leading-relaxed">
                 <span className="text-[#121212]/60 font-medium">
                   Private payments
                 </span>{" "}
