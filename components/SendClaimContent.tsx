@@ -162,21 +162,6 @@ export function SendClaimContent({
     <>
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
-        {state === "input" && (
-          <button
-            onClick={onBack}
-            className="-ml-1 p-1 rounded-full hover:bg-[#121212]/5 transition-colors"
-            aria-label="Back"
-          >
-            <Image
-              src="/assets/chevron-down-icon.svg"
-              alt=""
-              width={12}
-              height={12}
-              className="rotate-90"
-            />
-          </button>
-        )}
         <Image
           src="/assets/send.svg"
           alt="Send"
@@ -195,6 +180,21 @@ export function SendClaimContent({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
+            {/* Back to the send form (claim link is a branch off it) */}
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
+            >
+              <Image
+                src="/assets/chevron-down-icon.svg"
+                alt=""
+                width={10}
+                height={10}
+                className="rotate-90"
+              />
+              Back to send
+            </button>
+
             {/* Message Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-2 block">

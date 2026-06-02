@@ -102,7 +102,7 @@ export default function Home() {
         <h1 className="text-3xl font-semibold text-[#121212] text-center leading-tight mb-8">
           Send. Request. Claim.
           <br />
-          Privately.
+          <span className="text-[#121212]/40">Privately.</span>
         </h1>
 
         {ready && (
