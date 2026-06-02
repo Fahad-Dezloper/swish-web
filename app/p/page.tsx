@@ -61,6 +61,12 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabType>(
     searchParams.get("tab") === "activity" ? "activity" : "wallet"
   );
+  // Keep the URL in sync so a refresh restores the tab you're actually on
+  // (replaceState avoids a re-render/refetch).
+  const selectTab = (tab: TabType) => {
+    setActiveTab(tab);
+    window.history.replaceState(null, "", `/p?tab=${tab}`);
+  };
   const [showAddFunds, setShowAddFunds] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -189,7 +195,7 @@ export default function ProfilePage() {
         {/* Tab Toggle */}
         <div className="w-full max-w-[320px] flex mb-6 bg-[#121212]/5 rounded-full p-1">
           <button
-            onClick={() => setActiveTab("wallet")}
+            onClick={() => selectTab("wallet")}
             className={`flex-1 h-8 rounded-full text-sm font-medium transition-all ${
               activeTab === "wallet"
                 ? "bg-[#121212] text-[#fafafa]"
@@ -199,7 +205,7 @@ export default function ProfilePage() {
             Wallet
           </button>
           <button
-            onClick={() => setActiveTab("activity")}
+            onClick={() => selectTab("activity")}
             className={`flex-1 h-8 rounded-full text-sm font-medium transition-all ${
               activeTab === "activity"
                 ? "bg-[#121212] text-[#fafafa]"
