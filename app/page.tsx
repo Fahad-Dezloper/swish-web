@@ -118,7 +118,7 @@ export default function Home() {
                 className="w-full max-w-[320px] flex flex-col items-center"
               >
               <p className="text-sm text-[#121212]/60 mb-8 text-center">
-                Swish picks the best route.
+                Private payments on Solana. Swish picks the best route.
               </p>
               <motion.button
                 onClick={login}
