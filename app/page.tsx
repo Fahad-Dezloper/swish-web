@@ -117,7 +117,7 @@ export default function Home() {
                 transition={TRANSITION}
                 className="w-full max-w-[320px] flex flex-col items-center"
               >
-              <p className="text-sm text-[#121212]/60 mb-8 text-center leading-relaxed">
+              <p className="text-sm text-[#121212]/40 mb-8 text-center leading-relaxed">
                 Private payments on Solana.
                 <br />
                 Swish picks the best route.
