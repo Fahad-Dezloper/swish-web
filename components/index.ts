@@ -18,3 +18,4 @@ export { ActivityItem, formatTimeAgo } from "./ActivityItem";
 export type { Activity, Stats } from "./ActivityItem";
 export { AmountField } from "./AmountField";
 export { AccountChip } from "./AccountChip";
+export { AssetRow } from "./AssetRow";

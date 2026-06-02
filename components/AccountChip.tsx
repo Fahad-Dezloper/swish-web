@@ -8,6 +8,7 @@ import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 import { useSOLBalance } from "@/hooks/useSOLBalance";
 import { formatNumber } from "@/utils";
+import { AssetRow } from "./AssetRow";
 
 /**
  * Account control shared by the home + the request/claim pages.
@@ -119,23 +120,14 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
           >
             {/* Assets */}
             {assets.map((asset) => (
-              <div
+              <AssetRow
                 key={asset.symbol}
-                className="px-4 py-3 flex items-center gap-3"
-              >
-                <Image src={asset.icon} alt={asset.symbol} width={28} height={28} />
-                <div className="flex-1 min-w-0 text-left leading-tight">
-                  <div className="text-[#121212] text-sm font-medium">
-                    {asset.symbol}
-                  </div>
-                  <div className="text-[#121212]/40 text-xs mt-0.5">
-                    {asset.native}
-                  </div>
-                </div>
-                <div className="text-[#121212] text-sm font-medium">
-                  ${asset.usd.toFixed(2)}
-                </div>
-              </div>
+                className="px-4 py-3"
+                icon={asset.icon}
+                symbol={asset.symbol}
+                native={asset.native}
+                usd={`$${asset.usd.toFixed(2)}`}
+              />
             ))}
 
             <div className="h-px bg-[#121212]/[0.08] mx-4" />

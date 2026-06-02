@@ -13,6 +13,7 @@ import {
   WithdrawModal,
   UnlockModal,
   ActivityItem,
+  AssetRow,
 } from "@/components";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useUserActivity } from "@/hooks/useUserActivity";
@@ -132,6 +133,7 @@ export default function ProfilePage() {
     (usdcBalance || 0) +
     (solBalanceUSD || 0) +
     (umbraBalanceStatus === "ready" ? umbraBalanceUSDC || 0 : 0);
+  const [totalWhole, totalCents] = totalUSD.toFixed(2).split(".");
 
   return (
     <>
@@ -220,58 +222,40 @@ export default function ProfilePage() {
               {/* Total Balance */}
               <div className="text-center mb-6">
                 <p className="text-[#121212]/50 text-sm mb-1">Total Balance</p>
-                <p className="text-4xl font-normal text-[#121212]">
-                  {usdcLoading || solLoading
-                    ? "..."
-                    : `$${formatNumber(totalUSD)}`}
+                <p className="text-4xl font-semibold">
+                  {usdcLoading || solLoading ? (
+                    <span className="text-[#121212]">...</span>
+                  ) : (
+                    <>
+                      <span className="text-[#121212]">${totalWhole}</span>
+                      <span className="text-[#121212]/40">.{totalCents}</span>
+                    </>
+                  )}
                 </p>
               </div>
 
               {/* Token Rows */}
               <div className="space-y-3 mb-6">
-                {/* USDC */}
-                <div className="flex items-center gap-3">
-                  <Image
-                    src="/assets/usdc-icon.svg"
-                    alt="USDC"
-                    width={32}
-                    height={32}
-                  />
-                  <div className="flex-1">
-                    <p className="text-[#121212] font-medium">USDC</p>
-                    <p className="text-[#121212]/50 text-sm">
-                      {usdcLoading
-                        ? "..."
-                        : `${formatNumber(usdcBalance || 0)} USDC`}
-                    </p>
-                  </div>
-                  <p className="text-[#121212] font-medium">
-                    {usdcLoading ? "..." : `$${formatNumber(usdcBalance || 0)}`}
-                  </p>
-                </div>
-
-                {/* SOL */}
-                <div className="flex items-center gap-3">
-                  <Image
-                    src="/assets/sol-icon.svg"
-                    alt="SOL"
-                    width={32}
-                    height={32}
-                  />
-                  <div className="flex-1">
-                    <p className="text-[#121212] font-medium">SOL</p>
-                    <p className="text-[#121212]/50 text-sm">
-                      {solLoading
-                        ? "..."
-                        : `${(solBalance || 0).toFixed(4)} SOL`}
-                    </p>
-                  </div>
-                  <p className="text-[#121212] font-medium">
-                    {solLoading
+                <AssetRow
+                  icon="/assets/usdc-icon.svg"
+                  symbol="USDC"
+                  native={
+                    usdcLoading
                       ? "..."
-                      : `$${formatNumber(solBalanceUSD || 0)}`}
-                  </p>
-                </div>
+                      : `${formatNumber(usdcBalance || 0)} USDC`
+                  }
+                  usd={usdcLoading ? "..." : `$${(usdcBalance || 0).toFixed(2)}`}
+                />
+                <AssetRow
+                  icon="/assets/sol-icon.svg"
+                  symbol="SOL"
+                  native={
+                    solLoading ? "..." : `${(solBalance || 0).toFixed(4)} SOL`
+                  }
+                  usd={
+                    solLoading ? "..." : `$${(solBalanceUSD || 0).toFixed(2)}`
+                  }
+                />
               </div>
 
               {/* Umbra section */}
