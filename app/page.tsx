@@ -118,7 +118,7 @@ export default function Home() {
                 className="w-full max-w-[320px] flex flex-col items-center"
               >
               <p className="text-sm text-[#121212]/40 mb-8 text-center leading-relaxed">
-                <span className="text-[#121212] font-medium">
+                <span className="text-[#121212]/60 font-medium">
                   Private payments
                 </span>{" "}
                 on Solana.
