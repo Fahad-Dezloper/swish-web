@@ -117,10 +117,14 @@ export default function Home() {
                 transition={TRANSITION}
                 className="w-full max-w-[320px] flex flex-col items-center"
               >
-              <p className="text-sm text-[#121212]/60 mb-8 text-center">
-                Private payments on Solana.
+              <p className="text-sm mb-8 text-center leading-relaxed">
+                <span className="text-[#121212] font-medium">
+                  Private payments on Solana.
+                </span>
                 <br />
-                Swish picks the best route.
+                <span className="text-[#121212]/50">
+                  Swish picks the best route.
+                </span>
               </p>
               <motion.button
                 onClick={login}
