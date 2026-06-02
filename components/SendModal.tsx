@@ -7,7 +7,11 @@ import { PublicKey } from "@solana/web3.js";
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { QRScanner } from "./QRScanner";
+import { NumberPad } from "./NumberPad";
+import { AmountField } from "./AmountField";
+import { SendClaimContent } from "./SendClaimContent";
 import { ProtocolBadge } from "./ProtocolBadge";
+import { ProtocolSidebar } from "./ProtocolSidebar";
 import { formatNumber } from "@/utils";
 import { useSendTransaction } from "@/hooks/useSendTransaction";
 import { useUmbraSend } from "@/hooks/useUmbraSend";
@@ -33,22 +37,28 @@ const SEND_PROVIDER_POOL: ProviderId[] = [
 interface SendModalProps {
   isOpen: boolean;
   onClose: () => void;
-  amount: string;
-  onSendViaClaim: () => void;
+  balance: number | null;
   getSignature: GetSessionSignature;
 }
 
 type ModalState = "input" | "loading" | "success" | "error";
+// Within the "input" state, the user first enters an amount, then fills
+// in the recipient + routing details.
+type EntryStep = "amount" | "form";
+// A direct send, or generating a claim link — both share the keypad.
+type SendMode = "send" | "claim";
 type RecipientType = "wallet" | "x";
 type ProviderChoice = "auto" | "privacy-cash" | "magicblock-per" | "umbra";
 
 export function SendModal({
   isOpen,
   onClose,
-  amount,
-  onSendViaClaim,
+  balance,
   getSignature,
 }: SendModalProps) {
+  const [amount, setAmount] = useState("0");
+  const [entryStep, setEntryStep] = useState<EntryStep>("amount");
+  const [mode, setMode] = useState<SendMode>("send");
   const [walletAddress, setWalletAddress] = useState("");
   const [xHandle, setXHandle] = useState("");
   const [recipientType, setRecipientType] = useState<RecipientType>("wallet");
@@ -61,6 +71,7 @@ export function SendModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [isResolvingX, setIsResolvingX] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { send } = useSendTransaction();
   const { send: umbraSend, state: umbraSendState } = useUmbraSend();
   const { status: umbraStatus } = useUmbraStatus();
@@ -74,6 +85,26 @@ export function SendModal({
   } = useSessionSignature("magicblock-per");
 
   const numAmount = parseFloat(amount) || 0;
+  const hasValidAmount = numAmount > 0;
+  const exceedsBalance = balance !== null && numAmount > balance;
+
+  const handleNumberPress = (num: string) => {
+    if (amount === "0" && num !== ".") {
+      setAmount(num);
+    } else if (num === "." && amount.includes(".")) {
+      return;
+    } else {
+      setAmount(amount + num);
+    }
+  };
+
+  const handleBackspace = () => {
+    if (amount.length === 1) {
+      setAmount("0");
+    } else {
+      setAmount(amount.slice(0, -1));
+    }
+  };
 
   const isValidAddress = useMemo(() => {
     if (!walletAddress) return false;
@@ -259,7 +290,9 @@ export function SendModal({
       // PC and MB go through the server-prepare/submit flow with their
       // own session messages.
       if (dispatchProvider === "umbra") {
-        const baseUnits = BigInt(Math.round(numAmount * 1_000_000));
+        // Floor, never round up: rounding the 7th decimal up would ask
+        // for one more micro-USDC than the user holds and fail the send.
+        const baseUnits = BigInt(Math.floor(numAmount * 1_000_000));
         await umbraSend({
           receiverAddress,
           amountBaseUnits: baseUnits,
@@ -274,39 +307,20 @@ export function SendModal({
         if (!session) {
           throw new Error("Signature required to continue");
         }
-        try {
-          await send({
-            receiverAddress,
-            amount: numAmount,
-            token: "USDC",
-            signature: session.signature,
-            senderPublicKey: session.address,
-            // Pass the *resolved* providerId so the server validates
-            // against the matching session message and dispatches to the
-            // right provider — even when the user picked Auto.
-            providerId: dispatchProvider,
-          });
-        } catch (mbErr: any) {
-          // Auto-fallback: when picker is Auto and MB dispatch fails
-          // (catches partial outages /health doesn't see), retry once
-          // with PC. Costs a PC session-sig prompt if not cached.
-          if (provider === "auto" && dispatchProvider === "magicblock-per") {
-            console.warn("MB failed under Auto, falling back to PC:", mbErr);
-            const pcSession = await getSignature();
-            if (!pcSession) throw mbErr;
-            dispatchProvider = "privacy-cash";
-            await send({
-              receiverAddress,
-              amount: numAmount,
-              token: "USDC",
-              signature: pcSession.signature,
-              senderPublicKey: pcSession.address,
-              providerId: "privacy-cash",
-            });
-          } else {
-            throw mbErr;
-          }
-        }
+        // No silent fallback: if the resolved provider fails, surface the
+        // error and let the user retry. Auto-switching to another protocol
+        // changes the fee the user agreed to without consent.
+        await send({
+          receiverAddress,
+          amount: numAmount,
+          token: "USDC",
+          signature: session.signature,
+          senderPublicKey: session.address,
+          // Pass the *resolved* providerId so the server validates
+          // against the matching session message and dispatches to the
+          // right provider — even when the user picked Auto.
+          providerId: dispatchProvider,
+        });
       }
       setState("success");
     } catch (error: any) {
@@ -318,6 +332,9 @@ export function SendModal({
 
   const handleClose = () => {
     setState("input");
+    setAmount("0");
+    setEntryStep("amount");
+    setMode("send");
     setWalletAddress("");
     setXHandle("");
     setRecipientType("wallet");
@@ -349,6 +366,15 @@ export function SendModal({
   return (
     <>
       <Modal isOpen={isOpen} onClose={handleClose}>
+        {mode === "claim" ? (
+          // Claim-link creation lives in this same modal, reusing `amount`.
+          <SendClaimContent
+            amount={amount}
+            getSignature={getSignature}
+            onBack={() => setMode("send")}
+          />
+        ) : (
+        <>
         {/* Header */}
         <div className="flex items-center gap-2 mb-6">
           <Image
@@ -362,13 +388,77 @@ export function SendModal({
         </div>
 
         <AnimatePresence mode="wait">
-          {state === "input" && (
+          {state === "input" && entryStep === "amount" && (
             <motion.div
-              key="input"
+              key="amount"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
+              {/* Amount entry */}
+              <div className="mb-3">
+                <AmountField
+                  amount={amount}
+                  assetSymbol="USDC"
+                  onMax={
+                    balance !== null && balance > 0
+                      ? () => setAmount(String(balance))
+                      : undefined
+                  }
+                />
+              </div>
+              <p className="text-sm text-center mb-6 h-5">
+                {exceedsBalance ? (
+                  <span className="text-[#CB0000]">Exceeds your balance</span>
+                ) : balance !== null ? (
+                  <span className="text-[#121212]/50">
+                    {formatNumber(balance)} USDC available
+                  </span>
+                ) : (
+                  " "
+                )}
+              </p>
+
+              <div className="mb-6 w-full flex justify-center">
+                <NumberPad
+                  onNumberPress={handleNumberPress}
+                  onBackspace={handleBackspace}
+                />
+              </div>
+
+              <motion.button
+                onClick={() => setEntryStep("form")}
+                disabled={!hasValidAmount || exceedsBalance}
+                whileTap={{ scale: 0.98 }}
+                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              >
+                Continue
+              </motion.button>
+            </motion.div>
+          )}
+
+          {state === "input" && entryStep === "form" && (
+            <motion.div
+              key="form"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              {/* Back to amount entry */}
+              <button
+                onClick={() => setEntryStep("amount")}
+                className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
+              >
+                <Image
+                  src="/assets/chevron-down-icon.svg"
+                  alt=""
+                  width={10}
+                  height={10}
+                  className="rotate-90"
+                />
+                Edit amount
+              </button>
+
               {/* Recipient Type Toggle */}
               <div className="flex mb-4 bg-[#121212]/5 rounded-full p-1">
                 <button
@@ -453,104 +543,6 @@ export function SendModal({
                 )}
               </div>
 
-              {/* Privacy provider picker (compact) */}
-              <div className="mb-6">
-                <label className="text-sm text-[#121212]/50 mb-1 block">
-                  Privacy protocol
-                </label>
-                <div className="space-y-1.5">
-                  <button
-                    onClick={() => {
-                      if (noAutoTarget) return;
-                      setProvider("auto");
-                    }}
-                    disabled={noAutoTarget}
-                    title={
-                      noAutoTarget
-                        ? "All privacy protocols are temporarily unavailable"
-                        : undefined
-                    }
-                    className={`w-fit min-w-[72px] h-9 px-4 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                      provider === "auto"
-                        ? "bg-[#121212] text-[#fafafa]"
-                        : noAutoTarget
-                          ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                          : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                    }`}
-                  >
-                    Auto
-                  </button>
-                  <div className="flex gap-1.5">
-                    {(
-                      [
-                        "umbra",
-                        "magicblock-per",
-                        "privacy-cash",
-                      ] as ProviderId[]
-                    ).map((p) => {
-                      const senderUmbraDisabled =
-                        p === "umbra" && umbraStatus !== "registered";
-                      const recipientUmbraDisabled =
-                        p === "umbra" &&
-                        recipientUmbraStatus === "unregistered";
-                      const maintenanceDisabled = isProviderDisabled(p);
-                      const isDisabled =
-                        senderUmbraDisabled ||
-                        recipientUmbraDisabled ||
-                        maintenanceDisabled;
-                      return (
-                        <button
-                          key={p}
-                          onClick={() => {
-                            if (isDisabled) return;
-                            setProvider(p);
-                          }}
-                          disabled={isDisabled}
-                          title={
-                            maintenanceDisabled
-                              ? "Temporarily unavailable (maintenance)"
-                              : undefined
-                          }
-                          className={`flex-1 min-w-[72px] h-9 rounded-full text-xs font-medium transition-all flex items-center justify-center ${
-                            provider === p
-                              ? "bg-[#121212] text-[#fafafa]"
-                              : isDisabled
-                                ? "bg-[#121212]/5 text-[#121212]/30 cursor-not-allowed opacity-40"
-                                : "bg-[#121212]/5 text-[#121212]/70 hover:bg-[#121212]/10"
-                          }`}
-                        >
-                          <ProtocolBadge providerId={p} iconSize={14} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                {umbraStatus === "unregistered" && (
-                  <p className="text-xs text-[#121212]/50 mt-2">
-                    Enable Umbra in your{" "}
-                    <a
-                      href="/p"
-                      className="underline underline-offset-2 decoration-dashed hover:text-[#121212]"
-                    >
-                      profile
-                    </a>{" "}
-                    to send via Umbra.
-                  </p>
-                )}
-                {umbraStatus === "registered" &&
-                  recipientUmbraStatus === "checking" && (
-                    <p className="text-xs text-[#121212]/40 mt-2">
-                      Checking recipient on Umbra…
-                    </p>
-                  )}
-                {umbraStatus === "registered" &&
-                  recipientUmbraStatus === "unregistered" && (
-                    <p className="text-xs text-[#121212]/50 mt-2">
-                      Recipient is not registered on Umbra
-                    </p>
-                  )}
-              </div>
-
               {/* Amount Details */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
@@ -559,18 +551,58 @@ export function SendModal({
                     {formatNumber(numAmount)} USDC
                   </span>
                 </div>
-                {provider === "auto" &&
-                  ((recipientType === "wallet" && isValidAddress) ||
-                    (recipientType === "x" && isValidXHandle)) && (
-                    <div className="flex justify-between">
+                {((recipientType === "wallet" && isValidAddress) ||
+                  (recipientType === "x" && isValidXHandle)) &&
+                  // Hide the row entirely while auto is still resolving;
+                  // show once a protocol is known (auto-resolved or manual)
+                  (provider !== "auto" || autoResolved) && (
+                  <>
+                    <div className="flex justify-between items-center">
                       <span className="text-[#121212]">Routed via</span>
-                      {autoResolved ? (
-                        <ProtocolBadge providerId={autoResolved} />
-                      ) : (
-                        <span className="text-[#121212]">…</span>
-                      )}
+                      <button
+                        onClick={() => setPickerOpen(true)}
+                        className="flex items-center gap-1.5 text-[#121212] cursor-pointer hover:opacity-70 transition-opacity"
+                      >
+                        {provider === "auto" && autoResolved ? (
+                          <>
+                            <span className="text-[10px] font-medium text-[#121212]/60 uppercase tracking-wide px-1.5 py-0.5 rounded-md border border-[#121212]/15">
+                              Auto
+                            </span>
+                            <ProtocolBadge providerId={autoResolved} />
+                          </>
+                        ) : (
+                          <ProtocolBadge providerId={provider as ProviderId} />
+                        )}
+                        <Image
+                          src="/assets/chevron-down-icon.svg"
+                          alt=""
+                          width={10}
+                          height={10}
+                          className="-rotate-90"
+                        />
+                      </button>
                     </div>
-                  )}
+                    {provider === "umbra" && umbraStatus === "unregistered" && (
+                      <p className="text-xs text-[#121212]/50">
+                        Enable Umbra in your{" "}
+                        <a
+                          href="/p"
+                          className="underline underline-offset-2 decoration-dashed hover:text-[#121212]"
+                        >
+                          profile
+                        </a>{" "}
+                        to send via Umbra.
+                      </p>
+                    )}
+                    {provider === "umbra" &&
+                      umbraStatus === "registered" &&
+                      recipientUmbraStatus === "unregistered" && (
+                        <p className="text-xs text-[#121212]/50">
+                          Recipient is not registered on Umbra
+                        </p>
+                      )}
+                  </>
+                )}
                 <div className="flex justify-between">
                   <div>
                     <span className="text-[#121212]">Partner Fees</span>
@@ -599,7 +631,10 @@ export function SendModal({
                   !canProceed ||
                   isResolvingX ||
                   umbraBlockedByRecipient ||
-                  (provider === "auto" && (noAutoTarget || autoUnavailable))
+                  // Block until a protocol is actually chosen (auto-resolved
+                  // counts). Covers loading + router failure cases.
+                  (provider === "auto" &&
+                    (noAutoTarget || autoUnavailable || !autoResolved))
                 }
                 whileTap={{ scale: 0.98 }}
                 className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
@@ -607,12 +642,10 @@ export function SendModal({
                 {isResolvingX ? "Resolving..." : "Proceed"}
               </motion.button>
 
-              {/* Generate Claim Link - invisible for X sends */}
+              {/* Generate Claim Link - continues in this same modal (claim
+                  mode); invisible for X sends */}
               <button
-                onClick={() => {
-                  handleClose();
-                  onSendViaClaim();
-                }}
+                onClick={() => setMode("claim")}
                 disabled={recipientType === "x"}
                 className={`w-full mt-4 text-[#121212]/70 text-sm underline underline-offset-4 decoration-dashed hover:text-[#121212] transition-colors ${recipientType === "x" ? "invisible pointer-events-none" : ""}`}
               >
@@ -727,6 +760,25 @@ export function SendModal({
             </motion.div>
           )}
         </AnimatePresence>
+
+        <AnimatePresence>
+          {pickerOpen && (
+            <ProtocolSidebar
+              effectiveProvider={effectiveProvider}
+              onSelect={(p) => {
+                setProvider(p);
+                setPickerOpen(false);
+              }}
+              onClose={() => setPickerOpen(false)}
+              amount={numAmount}
+              flow="send"
+              umbraStatus={umbraStatus}
+              recipientUmbraStatus={recipientUmbraStatus}
+            />
+          )}
+        </AnimatePresence>
+        </>
+        )}
       </Modal>
 
       {/* QR Scanner Modal */}
