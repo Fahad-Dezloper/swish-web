@@ -20,6 +20,9 @@ interface WithdrawModalProps {
 
 type ModalState = "input" | "loading" | "success" | "error";
 
+// Keep in sync with MIN_WITHDRAW_USDC in app/api/withdraw/route.ts.
+const MIN_WITHDRAW = 0.1;
+
 export function WithdrawModal({
   isOpen,
   onClose,
@@ -45,7 +48,9 @@ export function WithdrawModal({
     }
   }, [walletAddress]);
 
-  const isValidAmount = numAmount > 0 && numAmount <= usdcBalance;
+  const isValidAmount =
+    numAmount >= MIN_WITHDRAW && numAmount <= usdcBalance;
+  const belowMin = numAmount > 0 && numAmount < MIN_WITHDRAW;
   const canProceed = isValidAddress && isValidAmount;
 
   const handleProceed = async () => {
@@ -175,8 +180,16 @@ export function WithdrawModal({
                     Max
                   </button>
                 </div>
-                <p className="text-xs text-[#121212]/40 mt-1 ml-4">
-                  Available: {formatNumber(usdcBalance)} USDC
+                <p className="text-xs mt-1 ml-4">
+                  {belowMin ? (
+                    <span className="text-[#CB0000]">
+                      Minimum withdrawal is $0.10.
+                    </span>
+                  ) : (
+                    <span className="text-[#121212]/40">
+                      Available: {formatNumber(usdcBalance)} USDC
+                    </span>
+                  )}
                 </p>
               </div>
 
