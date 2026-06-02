@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
+import { createSharedBalance } from "./sharedBalance";
 
 // USDC token mint on Solana mainnet
 const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
 // Token program ID
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
 
 interface UseUSDCBalanceResult {
   balance: number | null;
@@ -16,60 +18,34 @@ interface UseUSDCBalanceResult {
   refetch: () => void;
 }
 
-export function useUSDCBalance(walletAddress: string | null): UseUSDCBalanceResult {
-  const [balance, setBalance] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+async function fetchUSDCBalance(walletAddress: string): Promise<number> {
+  const rpcUrl =
+    process.env.NEXT_PUBLIC_RPC_URL! || "https://api.mainnet-beta.solana.com";
+  const connection = new Connection(rpcUrl, "confirmed");
+  const ownerPubkey = new PublicKey(walletAddress);
 
-  const fetchBalance = async () => {
-    if (!walletAddress) {
-      setBalance(null);
-      return;
-    }
+  const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+    ownerPubkey,
+    { programId: TOKEN_PROGRAM_ID }
+  );
 
-    setIsLoading(true);
-    setError(null);
+  const usdcAccount = tokenAccounts.value.find(
+    (account) =>
+      account.account.data.parsed.info.mint === USDC_MINT.toString()
+  );
 
-    try {
-      const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL! || "https://api.mainnet-beta.solana.com";
-      const connection = new Connection(rpcUrl, "confirmed");
-      const ownerPubkey = new PublicKey(walletAddress);
+  if (!usdcAccount) return 0;
+  // USDC has 6 decimals
+  return usdcAccount.account.data.parsed.info.tokenAmount.uiAmount || 0;
+}
 
-      // Get all token accounts for this wallet
-      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-        ownerPubkey,
-        { programId: TOKEN_PROGRAM_ID }
-      );
+// Shared cache keyed by address: a refetch from one place updates every
+// balance on screen. (No polling for now — pass an interval to re-enable.)
+const useShared = createSharedBalance<number>(fetchUSDCBalance);
 
-      // Find USDC token account
-      const usdcAccount = tokenAccounts.value.find(
-        (account) => account.account.data.parsed.info.mint === USDC_MINT.toString()
-      );
-
-      if (usdcAccount) {
-        const tokenAmount = usdcAccount.account.data.parsed.info.tokenAmount;
-        // USDC has 6 decimals
-        setBalance(tokenAmount.uiAmount || 0);
-      } else {
-        setBalance(0);
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch USDC balance:", err);
-      setError(err.message || "Failed to fetch balance");
-      setBalance(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBalance();
-  }, [walletAddress]);
-
-  return {
-    balance,
-    isLoading,
-    error,
-    refetch: fetchBalance,
-  };
+export function useUSDCBalance(
+  walletAddress: string | null
+): UseUSDCBalanceResult {
+  const { value, isLoading, error, refetch } = useShared(walletAddress);
+  return { balance: value, isLoading, error, refetch };
 }

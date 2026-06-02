@@ -39,7 +39,15 @@ export default function ProfilePage() {
     balance: solBalance,
     balanceUSD: solBalanceUSD,
     isLoading: solLoading,
+    refetch: refetchSOLBalance,
   } = useSOLBalance(walletAddress);
+
+  // Pull both balances now — shared cache means this updates the profile
+  // rows AND the home account chip at once.
+  const refreshBalances = () => {
+    refetchUSDCBalance();
+    refetchSOLBalance();
+  };
   const { status: umbraStatus, refetch: refetchUmbraStatus } = useUmbraStatus();
   const { register: registerUmbra, state: umbraRegisterState } = useUmbraRegister();
   const isUmbraRegistered = umbraStatus === "registered";
@@ -485,7 +493,10 @@ export default function ProfilePage() {
       {showAddFunds && walletAddress && (
         <AddFundsModal
           isOpen={showAddFunds}
-          onClose={() => setShowAddFunds(false)}
+          onClose={() => {
+            setShowAddFunds(false);
+            refreshBalances();
+          }}
           walletAddress={walletAddress}
         />
       )}
@@ -494,7 +505,10 @@ export default function ProfilePage() {
       {showWithdraw && walletAddress && (
         <WithdrawModal
           isOpen={showWithdraw}
-          onClose={() => setShowWithdraw(false)}
+          onClose={() => {
+            setShowWithdraw(false);
+            refreshBalances();
+          }}
           usdcBalance={usdcBalance || 0}
           getSignature={getSignature}
         />
