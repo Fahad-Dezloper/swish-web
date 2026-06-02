@@ -11,9 +11,10 @@ import {
   Spinner,
   ProtocolBadge,
   ProtocolSidebar,
-  WalletStatus,
+  AccountChip,
 } from "@/components";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
+import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
 import { useAutoRoute } from "@/hooks/useAutoRoute";
 import { useUmbraFulfill } from "@/hooks/useUmbraFulfill";
@@ -59,6 +60,7 @@ export default function RequestPage({
   const { login, authenticated } = usePrivy();
   const { wallets } = useWallets();
   const { walletAddress, getSignature } = useSessionSignature();
+  const { balance: payerBalance } = useUSDCBalance(walletAddress);
   // Mint MB session sig — when payer picks MB, server expects MB-signed sig.
   const { getSignature: getMbSessionSignature } =
     useSessionSignature("magicblock-per");
@@ -295,11 +297,6 @@ export default function RequestPage({
     }
   };
 
-  const formatAddress = (addr: string) => {
-    if (addr.length <= 10) return addr;
-    return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
-  };
-
   // Check if current user is the requestor (owner of this request)
   const isRequestor =
     authenticated &&
@@ -452,6 +449,13 @@ export default function RequestPage({
   if (!requestData) return null;
 
   const requestorReceives = requestData.amount - partnerFee;
+  // Payer must hold at least the request total (fee is taken from what the
+  // requester receives). Only gates the payer, not the requestor.
+  const insufficientBalance =
+    authenticated &&
+    !isRequestor &&
+    payerBalance !== null &&
+    payerBalance < requestData.amount;
 
   return (
     <main className="flex flex-col items-center p-4 w-full">
@@ -470,7 +474,7 @@ export default function RequestPage({
       </div>
 
       <div className="w-full flex justify-center mb-6">
-        <WalletStatus />
+        <AccountChip compact />
       </div>
 
       {/* Details */}
@@ -532,11 +536,21 @@ export default function RequestPage({
         </div>
       </div>
 
+      {/* Insufficient balance hint (payer only) */}
+      {pageState === "ready" && insufficientBalance && (
+        <p className="text-[#CB0000] text-sm mb-3 text-center">
+          Insufficient balance
+        </p>
+      )}
+
       {/* Pay Button (for payers) or Cancel Button (for requestor) */}
       {pageState === "ready" && !isRequestor && (
         <motion.button
           onClick={handlePay}
-          disabled={provider === "auto" && (noAutoTarget || autoUnavailable)}
+          disabled={
+            (provider === "auto" && (noAutoTarget || autoUnavailable)) ||
+            insufficientBalance
+          }
           whileTap={{ scale: 0.98 }}
           className="w-full max-w-[320px] h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
         >

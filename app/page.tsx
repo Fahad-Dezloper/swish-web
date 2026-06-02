@@ -3,18 +3,16 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import Image from "next/image";
 import Link from "next/link";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
-import { useSOLBalance } from "@/hooks/useSOLBalance";
 import { useUserRegistration } from "@/hooks/useUserRegistration";
 import { useUserActivity } from "@/hooks/useUserActivity";
 import { useDelayedUnmount } from "@/hooks/useDelayedUnmount";
-import { formatNumber } from "@/utils";
 import {
   ActionButton,
   ActivityItem,
+  AccountChip,
   Spinner,
   SendModal,
   ReceiveModal,
@@ -23,16 +21,11 @@ import {
 type ModalType = "send" | "receive" | null;
 
 export default function Home() {
-  const { ready, login, authenticated, logout, user } = usePrivy();
+  const { ready, login, authenticated } = usePrivy();
   const { walletAddress, getSignature } = useSessionSignature();
   useUserRegistration();
-  const {
-    balance,
-    isLoading: balanceLoading,
-    refetch: refetchUSDCBalance,
-  } = useUSDCBalance(walletAddress);
-  const { balance: solBalance, balanceUSD: solBalanceUSD } =
-    useSOLBalance(walletAddress);
+  const { balance, refetch: refetchUSDCBalance } =
+    useUSDCBalance(walletAddress);
   const {
     activities,
     isLoading: activityLoading,
@@ -40,9 +33,6 @@ export default function Home() {
   } = useUserActivity(walletAddress);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const mountedModal = useDelayedUnmount(activeModal, 350);
-  const [showAccount, setShowAccount] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const accountRef = useRef<HTMLDivElement>(null);
   // Gate slide/fade animations until Privy resolves, so a logged-in user
   // doesn't see the intro→wallet slide play on every page load.
   const [animate, setAnimate] = useState(false);
@@ -52,20 +42,6 @@ export default function Home() {
   const mainRef = useRef<HTMLElement>(null);
   const prevMainTop = useRef<number | null>(null);
   const prevAuthed = useRef(authenticated);
-
-  const isXUser = !!user?.twitter;
-  const twitterHandle = user?.twitter?.username;
-
-  // Close the account dropdown on outside click.
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
-        setShowAccount(false);
-      }
-    };
-    if (showAccount) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showAccount]);
 
   useEffect(() => {
     // One-time once Privy resolves: enables the connect/disconnect slide so
@@ -101,18 +77,6 @@ export default function Home() {
     prevAuthed.current = authenticated;
   });
 
-  const handleCopyAddress = async () => {
-    if (!walletAddress) return;
-    try {
-      await navigator.clipboard.writeText(walletAddress);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
-
-  const formatAddr = (addr: string) =>
-    addr.length <= 10 ? addr : `${addr.slice(0, 4)}...${addr.slice(-4)}`;
-
   const closeModal = () => {
     refetchUSDCBalance();
     refetchActivity();
@@ -124,27 +88,6 @@ export default function Home() {
   // Shared easing for the headline slide + content fade so they feel like
   // one motion.
   const TRANSITION = { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const };
-
-  // Account total across assets (USD). Split so the cents render muted.
-  const totalUSD = (balance ?? 0) + (solBalanceUSD ?? 0);
-  const [totalWhole, totalCents] = totalUSD.toFixed(2).split(".");
-
-  // Asset list for the expanded account panel — add a row here per asset
-  // as more land (SOL backend is Phase 2).
-  const assets = [
-    {
-      symbol: "USDC",
-      icon: "/assets/usdc-icon.svg",
-      native: `${formatNumber(balance ?? 0)} USDC`,
-      usd: balance ?? 0,
-    },
-    {
-      symbol: "SOL",
-      icon: "/assets/sol-icon.svg",
-      native: `${(solBalance ?? 0).toFixed(4)} SOL`,
-      usd: solBalanceUSD ?? 0,
-    },
-  ];
 
   return (
     <>
@@ -195,134 +138,9 @@ export default function Home() {
               transition={TRANSITION}
               className="w-full max-w-[320px] flex flex-col items-center"
             >
-              {/* Account — total collapsed; assets + wallet info expanded */}
-              <div className="relative w-full mb-8" ref={accountRef}>
-                <button
-                  onClick={() => setShowAccount((prev) => !prev)}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-2xl hover:bg-[#121212]/[0.03] transition-colors"
-                >
-                  <span className="text-3xl font-semibold whitespace-nowrap">
-                    {balanceLoading && balance === null ? (
-                      <span className="text-[#121212]/40">…</span>
-                    ) : (
-                      <>
-                        <span className="text-[#121212]">${totalWhole}</span>
-                        <span className="text-[#121212]/40">.{totalCents}</span>
-                      </>
-                    )}
-                  </span>
-                  <Image
-                    src="/assets/chevron-down-icon.svg"
-                    alt=""
-                    width={14}
-                    height={14}
-                    className={`transition-transform ${showAccount ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                <AnimatePresence>
-                  {showAccount && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute top-full left-0 right-0 mt-2 bg-[#fafafa] border border-[#121212]/10 rounded-2xl shadow-lg z-50 overflow-hidden"
-                    >
-                      {/* Assets */}
-                      {assets.map((asset) => (
-                        <div
-                          key={asset.symbol}
-                          className="px-4 py-3 flex items-center gap-3"
-                        >
-                          <Image
-                            src={asset.icon}
-                            alt={asset.symbol}
-                            width={28}
-                            height={28}
-                          />
-                          <div className="flex-1 min-w-0 text-left leading-tight">
-                            <div className="text-[#121212] text-sm font-medium">
-                              {asset.symbol}
-                            </div>
-                            <div className="text-[#121212]/40 text-xs mt-0.5">
-                              {asset.native}
-                            </div>
-                          </div>
-                          <div className="text-[#121212] text-sm font-medium">
-                            ${asset.usd.toFixed(2)}
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Separator */}
-                      <div className="h-px bg-[#121212]/[0.08] mx-4" />
-
-                      {/* Wallet Address */}
-                      <button
-                        onClick={copied ? undefined : handleCopyAddress}
-                        className={`w-full flex items-center gap-2.5 px-4 py-3 transition-colors ${copied ? "pointer-events-none" : "hover:bg-[#121212]/5"}`}
-                      >
-                        <Image
-                          src="/assets/sol-icon.svg"
-                          alt=""
-                          width={16}
-                          height={16}
-                        />
-                        <span className="text-[#121212] text-md flex-1 text-left">
-                          {walletAddress ? formatAddr(walletAddress) : ""}
-                        </span>
-                        <Image
-                          src={
-                            copied
-                              ? "/assets/success-alt.svg"
-                              : "/assets/copy-icon.svg"
-                          }
-                          alt=""
-                          width={copied ? 16 : 14}
-                          height={copied ? 8 : 14}
-                        />
-                      </button>
-
-                      {/* X Handle */}
-                      {isXUser && twitterHandle && (
-                        <a
-                          href={`https://x.com/${twitterHandle}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#121212]/5 transition-colors"
-                        >
-                          <Image
-                            src="/assets/x-icon.svg"
-                            alt=""
-                            width={16}
-                            height={16}
-                          />
-                          <span className="text-[#121212]/60 text-sm">
-                            @{twitterHandle}
-                          </span>
-                        </a>
-                      )}
-
-                      {/* Logout */}
-                      <button
-                        onClick={() => {
-                          setShowAccount(false);
-                          logout();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#121212]/5 transition-colors"
-                      >
-                        <Image
-                          src="/assets/logout-icon.svg"
-                          alt=""
-                          width={16}
-                          height={16}
-                        />
-                        <span className="text-[#121212] text-sm">Logout</span>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+              {/* Account — balance + assets + wallet info */}
+              <div className="w-full mb-8">
+                <AccountChip />
               </div>
 
               {/* Action Buttons */}

@@ -9,7 +9,7 @@ import {
   Spinner,
   ClaimPassphraseModal,
   ProtocolBadge,
-  WalletStatus,
+  AccountChip,
 } from "@/components";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
@@ -260,7 +260,7 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
         </div>
 
         <div className="w-full flex justify-center mb-6">
-          <WalletStatus />
+          <AccountChip compact />
         </div>
 
         {/* Details */}
