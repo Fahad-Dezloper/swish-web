@@ -65,7 +65,10 @@ export function formatTimeAgo(dateString: string) {
   return `${date.getDate()} ${months[date.getMonth()]}`;
 }
 
-const getActivityLabel = (activity: Activity, walletAddress?: string | null) => {
+const getActivityLabel = (
+  activity: Activity,
+  walletAddress?: string | null,
+) => {
   const isSender =
     activity.sender_address?.toLowerCase() === walletAddress?.toLowerCase();
   switch (activity.type) {
@@ -79,7 +82,8 @@ const getActivityLabel = (activity: Activity, walletAddress?: string | null) => 
         : `Claimed ${formatNumber(activity.amount)} USDC`;
     case "request":
       if (
-        activity.receiver_address?.toLowerCase() === walletAddress?.toLowerCase()
+        activity.receiver_address?.toLowerCase() ===
+        walletAddress?.toLowerCase()
       ) {
         return `Requested ${formatNumber(activity.amount)} USDC`;
       }
@@ -96,7 +100,9 @@ const getActivityIcon = (activity: Activity, walletAddress?: string | null) => {
     return isSender ? "/assets/send.svg" : "/assets/receive.svg";
   }
   if (activity.type === "request") {
-    if (activity.receiver_address?.toLowerCase() === walletAddress?.toLowerCase()) {
+    if (
+      activity.receiver_address?.toLowerCase() === walletAddress?.toLowerCase()
+    ) {
       return "/assets/receive.svg";
     }
     return "/assets/send.svg";
@@ -126,7 +132,7 @@ export function ActivityItem({
         alt=""
         width={20}
         height={20}
-        className="mt-0.5 invert"
+        className="mt-2 invert"
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
