@@ -10,14 +10,6 @@ import { useSOLBalance } from "@/hooks/useSOLBalance";
 import { formatNumber } from "@/utils";
 import { AssetRow } from "./AssetRow";
 
-/**
- * Account control shared by the home + the request/claim pages.
- * Collapsed: account total (USD). Expanded: per-asset rows + wallet info
- * (address/copy, X handle, logout). Not connected: a Connect Wallet trigger.
- *
- * `compact` shrinks the collapsed total for the transaction pages, where the
- * page's own big amount is the focus.
- */
 export function AccountChip({ compact = false }: { compact?: boolean }) {
   const { login, authenticated, logout, user } = usePrivy();
   const { walletAddress } = useSessionSignature();
@@ -55,7 +47,7 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
     return (
       <button
         onClick={login}
-        className="flex items-center gap-1.5 text-sm text-[#121212]/50 hover:text-[#121212]/70 underline underline-offset-4 decoration-dashed transition-colors"
+        className="flex items-center gap-1.5 text-sm text-[#121212]/50 hover:text-[#121212]/70 underline underline-offset-4 decoration-dashed transition-colors cursor-pointer"
       >
         Connect Wallet
       </button>
@@ -86,8 +78,8 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
         onClick={() => setOpen((p) => !p)}
         className={
           compact
-            ? "flex items-center gap-1.5 hover:opacity-70 transition-opacity"
-            : "w-full flex items-center justify-center gap-2 py-2 rounded-2xl hover:bg-[#121212]/[0.03] transition-colors"
+            ? "flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
+            : "w-full flex items-center justify-center gap-2 py-2 rounded-2xl hover:bg-[#121212]/3 transition-colors cursor-pointer"
         }
       >
         <span
@@ -118,7 +110,6 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
             transition={{ duration: 0.15 }}
             className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-[#fafafa] border border-[#121212]/10 rounded-2xl shadow-lg z-50 overflow-hidden"
           >
-            {/* Assets */}
             {assets.map((asset) => (
               <AssetRow
                 key={asset.symbol}
@@ -130,12 +121,11 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
               />
             ))}
 
-            <div className="h-px bg-[#121212]/[0.08] mx-4" />
+            <div className="h-px bg-[#121212]/8 mx-4" />
 
-            {/* Wallet Address */}
             <button
               onClick={copied ? undefined : copyAddress}
-              className={`w-full flex items-center gap-2.5 px-4 py-3 transition-colors ${copied ? "pointer-events-none" : "hover:bg-[#121212]/5"}`}
+              className={`w-full flex items-center gap-2.5 px-4 py-3 transition-colors ${copied ? "pointer-events-none" : "hover:bg-[#121212]/5 cursor-pointer"}`}
             >
               <Image src="/assets/sol-icon.svg" alt="" width={16} height={16} />
               <span className="text-[#121212] text-md flex-1 text-left">
@@ -149,7 +139,6 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
               />
             </button>
 
-            {/* X Handle */}
             {isXUser && twitterHandle && (
               <a
                 href={`https://x.com/${twitterHandle}`}
@@ -162,13 +151,12 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
               </a>
             )}
 
-            {/* Logout */}
             <button
               onClick={() => {
                 setOpen(false);
                 logout();
               }}
-              className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#121212]/5 transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#121212]/5 transition-colors cursor-pointer"
             >
               <Image src="/assets/logout-icon.svg" alt="" width={16} height={16} />
               <span className="text-[#121212] text-sm">Logout</span>

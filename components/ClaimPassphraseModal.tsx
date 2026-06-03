@@ -33,7 +33,6 @@ export function ClaimPassphraseModal({
   const [passphrase, setPassphrase] = useState("");
   const [state, setState] = useState<ModalState>("input");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Fee shown reflects the row's actual protocol picked by the sender.
   const { feeUSDC: partnerFee } = useProtocolFee(providerId, amount, "send_claim");
   const total = amount - partnerFee;
 
@@ -82,7 +81,6 @@ export function ClaimPassphraseModal({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Image src="/assets/receive.svg" alt="Claim" width={24} height={24} className="invert" />
         <h2 className="text-2xl font-semibold text-[#121212]">Claim</h2>
@@ -96,7 +94,6 @@ export function ClaimPassphraseModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Passphrase Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-1 block">
                 Enter passphrase
@@ -110,7 +107,6 @@ export function ClaimPassphraseModal({
               />
             </div>
 
-            {/* Amount Details */}
             <div className="space-y-2 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -126,12 +122,11 @@ export function ClaimPassphraseModal({
               </div>
             </div>
 
-            {/* Proceed Button */}
             <motion.button
               onClick={handleProceed}
               disabled={!passphrase.trim()}
               whileTap={{ scale: 0.98 }}
-              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
               Proceed
             </motion.button>
@@ -158,7 +153,6 @@ export function ClaimPassphraseModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Success Details */}
             <div className="space-y-2 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -174,11 +168,10 @@ export function ClaimPassphraseModal({
               </div>
             </div>
 
-            {/* Success Button */}
             <motion.button
               onClick={handleClose}
               whileTap={{ scale: 0.98 }}
-              className="w-full h-10 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              className="w-full h-10 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
               <Image src="/assets/success-alt.svg" alt="Success" width={24} height={24} />
             </motion.button>
@@ -203,7 +196,7 @@ export function ClaimPassphraseModal({
             <motion.button
               onClick={handleRetry}
               whileTap={{ scale: 0.98 }}
-              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
               Try Again
             </motion.button>

@@ -20,7 +20,6 @@ interface WithdrawModalProps {
 
 type ModalState = "input" | "loading" | "success" | "error";
 
-// Keep in sync with MIN_WITHDRAW_USDC in app/api/withdraw/route.ts.
 const MIN_WITHDRAW = 0.1;
 
 export function WithdrawModal({
@@ -48,8 +47,7 @@ export function WithdrawModal({
     }
   }, [walletAddress]);
 
-  const isValidAmount =
-    numAmount >= MIN_WITHDRAW && numAmount <= usdcBalance;
+  const isValidAmount = numAmount >= MIN_WITHDRAW && numAmount <= usdcBalance;
   const belowMin = numAmount > 0 && numAmount < MIN_WITHDRAW;
   const canProceed = isValidAddress && isValidAmount;
 
@@ -111,15 +109,8 @@ export function WithdrawModal({
   return (
     <>
       <Modal isOpen={isOpen} onClose={handleClose}>
-        {/* Header */}
         <div className="flex items-center gap-2 mb-6">
-          <Image
-            src="/assets/send.svg"
-            alt="Withdraw"
-            width={24}
-            height={24}
-            className="invert"
-          />
+          <Image src="/assets/send.svg" alt="Withdraw" width={24} height={24} className="invert" />
           <h2 className="text-2xl font-semibold text-[#121212]">Withdraw</h2>
         </div>
 
@@ -131,7 +122,6 @@ export function WithdrawModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Wallet Address Input */}
               <div className="mb-4">
                 <label className="text-sm text-[#121212]/50 mb-1 block">
                   Destination wallet address
@@ -146,23 +136,15 @@ export function WithdrawModal({
                   />
                   <button
                     onClick={() => setShowQRScanner(true)}
-                    className="w-12 h-12 rounded-full border border-[#121212]/10 flex items-center justify-center hover:bg-[#121212]/5 transition-colors shrink-0"
+                    className="w-12 h-12 rounded-full border border-[#121212]/10 flex items-center justify-center hover:bg-[#121212]/5 transition-colors shrink-0 cursor-pointer"
                   >
-                    <Image
-                      src="/assets/scan-icon.svg"
-                      alt="Scan QR"
-                      width={20}
-                      height={20}
-                    />
+                    <Image src="/assets/scan-icon.svg" alt="Scan QR" width={20} height={20} />
                   </button>
                 </div>
               </div>
 
-              {/* Amount Input */}
               <div className="mb-6">
-                <label className="text-sm text-[#121212]/50 mb-1 block">
-                  Amount (USDC)
-                </label>
+                <label className="text-sm text-[#121212]/50 mb-1 block">Amount (USDC)</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -175,31 +157,24 @@ export function WithdrawModal({
                   />
                   <button
                     onClick={handleMax}
-                    className="h-12 px-4 rounded-full border border-[#121212]/10 text-[#121212]/70 text-sm font-medium hover:bg-[#121212]/5 transition-colors shrink-0"
+                    className="h-12 px-4 rounded-full border border-[#121212]/10 text-[#121212]/70 text-sm font-medium hover:bg-[#121212]/5 transition-colors shrink-0 cursor-pointer"
                   >
                     Max
                   </button>
                 </div>
                 <p className="text-xs mt-1 ml-4">
                   {belowMin ? (
-                    <span className="text-[#CB0000]">
-                      Minimum withdrawal is $0.10.
-                    </span>
+                    <span className="text-[#CB0000]">Minimum withdrawal is $0.10.</span>
                   ) : (
-                    <span className="text-[#121212]/40">
-                      Available: {formatNumber(usdcBalance)} USDC
-                    </span>
+                    <span className="text-[#121212]/40">Available: {formatNumber(usdcBalance)} USDC</span>
                   )}
                 </p>
               </div>
 
-              {/* Summary */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Amount</span>
-                  <span className="text-[#121212]">
-                    {formatNumber(numAmount)} USDC
-                  </span>
+                  <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Network Fee</span>
@@ -207,12 +182,11 @@ export function WithdrawModal({
                 </div>
               </div>
 
-              {/* Proceed Button */}
               <motion.button
                 onClick={handleProceed}
                 disabled={!canProceed}
                 whileTap={{ scale: 0.98 }}
-                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
               >
                 Withdraw
               </motion.button>
@@ -228,9 +202,7 @@ export function WithdrawModal({
               className="flex flex-col items-center justify-center py-12"
             >
               <Spinner size={48} color="#121212" />
-              <p className="mt-4 text-[#121212]/70">
-                Processing withdrawal...
-              </p>
+              <p className="mt-4 text-[#121212]/70">Processing withdrawal...</p>
             </motion.div>
           )}
 
@@ -244,15 +216,11 @@ export function WithdrawModal({
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Sent To</span>
-                  <span className="text-[#121212]">
-                    {formatAddress(walletAddress)}
-                  </span>
+                  <span className="text-[#121212]">{formatAddress(walletAddress)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Amount</span>
-                  <span className="text-[#121212]">
-                    {formatNumber(numAmount)} USDC
-                  </span>
+                  <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Network Fee</span>
@@ -263,14 +231,9 @@ export function WithdrawModal({
               <motion.button
                 onClick={handleClose}
                 whileTap={{ scale: 0.98 }}
-                className="w-full h-10 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+                className="w-full h-10 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
               >
-                <Image
-                  src="/assets/success-alt.svg"
-                  alt="Success"
-                  width={24}
-                  height={24}
-                />
+                <Image src="/assets/success-alt.svg" alt="Success" width={24} height={24} />
               </motion.button>
             </motion.div>
           )}
@@ -286,16 +249,14 @@ export function WithdrawModal({
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
                 <span className="text-red-500 text-2xl">!</span>
               </div>
-              <p className="text-[#121212] font-medium mb-2">
-                Withdrawal Failed
-              </p>
+              <p className="text-[#121212] font-medium mb-2">Withdrawal Failed</p>
               <p className="text-[#121212]/60 text-sm text-center mb-6">
                 {errorMessage || "Something went wrong"}
               </p>
               <motion.button
                 onClick={handleRetry}
                 whileTap={{ scale: 0.98 }}
-                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
               >
                 Try Again
               </motion.button>

@@ -10,19 +10,13 @@ interface NumberPadProps {
 
 export function NumberPad({ onNumberPress, onBackspace }: NumberPadProps) {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"];
-  // Which key to briefly highlight (set when a physical key is pressed).
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Latest handlers, so the keydown listener attaches once but always calls
-  // the current callbacks.
   const handlers = useRef({ onNumberPress, onBackspace });
   useEffect(() => {
     handlers.current = { onNumberPress, onBackspace };
   });
 
-  // Desktop physical-keyboard entry. NumberPad is only mounted during the
-  // amount step (no text fields there), so this never hijacks typing in the
-  // recipient/message inputs.
   useEffect(() => {
     const flash = (key: string) => {
       setActiveKey(key);
@@ -58,7 +52,7 @@ export function NumberPad({ onNumberPress, onBackspace }: NumberPadProps) {
         <button
           key={num}
           onClick={() => onNumberPress(num)}
-          className={`h-14 text-2xl font-medium text-[#121212] rounded-xl outline-none transition-colors hover:bg-[#121212]/5 ${
+          className={`h-14 text-2xl font-medium text-[#121212] rounded-xl outline-none transition-colors hover:bg-[#121212]/5 cursor-pointer ${
             activeKey === num ? "bg-[#121212]/10" : "active:bg-[#121212]/10"
           }`}
         >
@@ -67,7 +61,7 @@ export function NumberPad({ onNumberPress, onBackspace }: NumberPadProps) {
       ))}
       <button
         onClick={onBackspace}
-        className={`h-14 flex items-center justify-center rounded-xl outline-none transition-colors hover:bg-[#121212]/5 ${
+        className={`h-14 flex items-center justify-center rounded-xl outline-none transition-colors hover:bg-[#121212]/5 cursor-pointer ${
           activeKey === "backspace" ? "bg-[#121212]/10" : "active:bg-[#121212]/10"
         }`}
       >

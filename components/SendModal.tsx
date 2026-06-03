@@ -42,10 +42,7 @@ interface SendModalProps {
 }
 
 type ModalState = "input" | "loading" | "success" | "error";
-// Within the "input" state, the user first enters an amount, then fills
-// in the recipient + routing details.
 type EntryStep = "amount" | "form";
-// A direct send, or generating a claim link — both share the keypad.
 type SendMode = "send" | "claim";
 type RecipientType = "wallet" | "x";
 type ProviderChoice = "auto" | "privacy-cash" | "magicblock-per" | "umbra";
@@ -75,10 +72,6 @@ export function SendModal({
   const { send } = useSendTransaction();
   const { send: umbraSend, state: umbraSendState } = useUmbraSend();
   const { status: umbraStatus } = useUmbraStatus();
-  // Mint MB session sig — when user picks MB (or Auto resolves to MB),
-  // server expects MB-signed sig (per `getSessionMessageForProvider`).
-  // walletAddress here is the SENDER (current user) — same regardless of
-  // session-context arg.
   const {
     getSignature: getMbSessionSignature,
     walletAddress: senderAddress,
@@ -89,7 +82,6 @@ export function SendModal({
   const exceedsBalance = balance !== null && numAmount > balance;
 
   const handleNumberPress = (num: string) => {
-    // USDC for now; pass the selected asset's symbol once it's selectable.
     setAmount((prev) => appendAmountKey(prev, num, decimalsForAsset("USDC")));
   };
 
@@ -113,15 +105,9 @@ export function SendModal({
 
   const isValidXHandle = useMemo(() => {
     if (!xHandle) return false;
-    // Basic X handle validation: alphanumeric and underscores, 1-15 chars
     return /^[a-zA-Z0-9_]{1,15}$/.test(xHandle);
   }, [xHandle]);
 
-  // Resolve Auto pre-proceed for both wallet and X modes. For X mode we
-  // wait until the check-x debounce has produced a final status before
-  // firing — `resolvedXAddress` is null until the handle is found, and
-  // for Case 3 (brand-new X user) it stays null forever. The server's
-  // preview handles null receiver gracefully (falls through to MB/PC).
   const xResolveSettled =
     recipientUmbraStatus !== "idle" && recipientUmbraStatus !== "checking";
   const noAutoTarget = areAllProvidersDisabled(SEND_PROVIDER_POOL);
@@ -140,9 +126,6 @@ export function SendModal({
           : null,
   });
 
-  // Effective provider for dispatch + fee display. When picker is Auto
-  // and we've resolved, use the resolved one; otherwise fall back to
-  // "auto" (which the fee hook treats as PC worst-case).
   const effectiveProvider: ProviderId | "auto" =
     provider === "auto" ? (autoResolved ?? "auto") : provider;
 
@@ -156,10 +139,6 @@ export function SendModal({
   const canProceed =
     recipientType === "wallet" ? isValidAddress : isValidXHandle;
 
-  // Debounced recipient registration check. Wallet mode hits
-  // /api/umbra/status (on-chain only). X mode hits /api/user/check-x
-  // (DB lookup + on-chain) which also resolves the wallet address —
-  // stored in resolvedXAddress for useAutoRoute.
   useEffect(() => {
     const validWallet = recipientType === "wallet" && isValidAddress;
     const validX = recipientType === "x" && isValidXHandle;
@@ -182,9 +161,7 @@ export function SendModal({
             return;
           }
           const json = (await res.json()) as { registered: boolean };
-          setRecipientUmbraStatus(
-            json.registered ? "registered" : "unregistered"
-          );
+          setRecipientUmbraStatus(json.registered ? "registered" : "unregistered");
         } else {
           const res = await fetch(
             `/api/user/check-x?handle=${encodeURIComponent(xHandle)}`
@@ -200,9 +177,7 @@ export function SendModal({
             umbraRegistered: boolean;
           };
           setResolvedXAddress(json.walletAddress);
-          setRecipientUmbraStatus(
-            json.umbraRegistered ? "registered" : "unregistered"
-          );
+          setRecipientUmbraStatus(json.umbraRegistered ? "registered" : "unregistered");
         }
       } catch {
         if (!cancelled) setRecipientUmbraStatus("error");
@@ -214,12 +189,6 @@ export function SendModal({
     };
   }, [walletAddress, xHandle, recipientType, isValidAddress, isValidXHandle]);
 
-  // If the user is currently on Umbra and the recipient turns out to be
-  // unregistered, we DO NOT silently switch them — that would route the
-  // send through PC and surprise the user with a PC sig prompt. Instead
-  // we block proceed (see canProceedFinal below) and show a clear hint.
-  // The user must manually pick a different protocol. Applies in both
-  // wallet and X modes (X mode resolves recipientUmbraStatus via check-x).
   const umbraBlockedByRecipient =
     provider === "umbra" && recipientUmbraStatus === "unregistered";
 
@@ -255,7 +224,6 @@ export function SendModal({
     try {
       let receiverAddress = walletAddress;
 
-      // If X mode, resolve handle to wallet address first
       if (recipientType === "x") {
         const resolved = await resolveXHandle();
         if (!resolved) {
@@ -265,9 +233,6 @@ export function SendModal({
         setWalletAddress(resolved);
       }
 
-      // For Auto + X-handle, the recipient just resolved — call the
-      // router preview now that we know the receiver. For Auto + wallet
-      // mode, autoResolved is already populated by useAutoRoute.
       let dispatchProvider: ProviderId | "auto" = effectiveProvider;
       if (provider === "auto" && dispatchProvider === "auto") {
         const previewRes = await fetch(
@@ -275,26 +240,14 @@ export function SendModal({
             senderAddress || ""
           )}&receiver=${encodeURIComponent(receiverAddress)}`
         );
-        const previewJson = (await previewRes.json()) as {
-          providerId: ProviderId;
-        };
+        const previewJson = (await previewRes.json()) as { providerId: ProviderId };
         dispatchProvider = previewJson.providerId;
       }
 
-      // Umbra direct Send runs the SDK client-side (3 prompts: consent + 2 deposit txs).
-      // PC and MB go through the server-prepare/submit flow with their
-      // own session messages.
       if (dispatchProvider === "umbra") {
-        // Floor, never round up: rounding the 7th decimal up would ask
-        // for one more micro-USDC than the user holds and fail the send.
         const baseUnits = BigInt(Math.floor(numAmount * 1_000_000));
-        await umbraSend({
-          receiverAddress,
-          amountBaseUnits: baseUnits,
-        });
+        await umbraSend({ receiverAddress, amountBaseUnits: baseUnits });
       } else {
-        // Pick the right session-sig hook for the resolved protocol.
-        // PC uses the parent's PC sig (the default).
         const session =
           dispatchProvider === "magicblock-per"
             ? await getMbSessionSignature()
@@ -302,18 +255,12 @@ export function SendModal({
         if (!session) {
           throw new Error("Signature required to continue");
         }
-        // No silent fallback: if the resolved provider fails, surface the
-        // error and let the user retry. Auto-switching to another protocol
-        // changes the fee the user agreed to without consent.
         await send({
           receiverAddress,
           amount: numAmount,
           token: "USDC",
           signature: session.signature,
           senderPublicKey: session.address,
-          // Pass the *resolved* providerId so the server validates
-          // against the matching session message and dispatches to the
-          // right provider — even when the user picked Auto.
           providerId: dispatchProvider,
         });
       }
@@ -362,7 +309,6 @@ export function SendModal({
     <>
       <Modal isOpen={isOpen} onClose={handleClose}>
         {mode === "claim" ? (
-          // Claim-link creation lives in this same modal, reusing `amount`.
           <SendClaimContent
             amount={amount}
             getSignature={getSignature}
@@ -370,15 +316,8 @@ export function SendModal({
           />
         ) : (
         <>
-        {/* Header */}
         <div className="flex items-center gap-2 mb-6">
-          <Image
-            src="/assets/send.svg"
-            alt="Send"
-            width={24}
-            height={24}
-            className="invert"
-          />
+          <Image src="/assets/send.svg" alt="Send" width={24} height={24} className="invert" />
           <h2 className="text-2xl font-semibold text-[#121212]">Send</h2>
         </div>
 
@@ -390,7 +329,6 @@ export function SendModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Amount entry */}
               <div className="mb-3">
                 <AmountField
                   amount={amount}
@@ -425,7 +363,7 @@ export function SendModal({
                 onClick={() => setEntryStep("form")}
                 disabled={!hasValidAmount || exceedsBalance}
                 whileTap={{ scale: 0.98 }}
-                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
               >
                 Continue
               </motion.button>
@@ -439,43 +377,29 @@ export function SendModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Back to amount entry */}
               <button
                 onClick={() => setEntryStep("amount")}
-                className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
+                className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors cursor-pointer"
               >
-                <Image
-                  src="/assets/chevron-down-icon.svg"
-                  alt=""
-                  width={10}
-                  height={10}
-                  className="rotate-90"
-                />
+                <Image src="/assets/chevron-down-icon.svg" alt="" width={10} height={10} className="rotate-90" />
                 Edit amount
               </button>
 
-              {/* Recipient Type Toggle */}
               <div className="flex mb-4 bg-[#121212]/5 rounded-full p-1">
                 <button
                   onClick={() => setRecipientType("wallet")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 h-8 rounded-full text-sm font-medium transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 h-8 rounded-full text-sm font-medium transition-all cursor-pointer ${
                     recipientType === "wallet"
                       ? "bg-[#121212] text-[#fafafa]"
                       : "text-[#121212]/50"
                   }`}
                 >
-                  <Image
-                    src="/assets/sol-icon.svg"
-                    alt=""
-                    width={14}
-                    height={14}
-
-                  />
+                  <Image src="/assets/sol-icon.svg" alt="" width={14} height={14} />
                   Wallet
                 </button>
                 <button
                   onClick={() => setRecipientType("x")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 h-8 rounded-full text-sm font-medium transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 h-8 rounded-full text-sm font-medium transition-all cursor-pointer ${
                     recipientType === "x"
                       ? "bg-[#121212] text-[#fafafa]"
                       : "text-[#121212]/50"
@@ -492,7 +416,6 @@ export function SendModal({
                 </button>
               </div>
 
-              {/* Recipient Input */}
               <div className="mb-6">
                 {recipientType === "wallet" ? (
                   <>
@@ -509,14 +432,9 @@ export function SendModal({
                       />
                       <button
                         onClick={() => setShowQRScanner(true)}
-                        className="w-12 h-12 rounded-full border border-[#121212]/10 flex items-center justify-center hover:bg-[#121212]/5 transition-colors shrink-0"
+                        className="w-12 h-12 rounded-full border border-[#121212]/10 flex items-center justify-center hover:bg-[#121212]/5 transition-colors shrink-0 cursor-pointer"
                       >
-                        <Image
-                          src="/assets/scan-icon.svg"
-                          alt="Scan QR"
-                          width={20}
-                          height={20}
-                        />
+                        <Image src="/assets/scan-icon.svg" alt="Scan QR" width={20} height={20} />
                       </button>
                     </div>
                   </>
@@ -528,9 +446,7 @@ export function SendModal({
                     <input
                       type="text"
                       value={xHandle}
-                      onChange={(e) =>
-                        setXHandle(e.target.value.replace(/^@/, ""))
-                      }
+                      onChange={(e) => setXHandle(e.target.value.replace(/^@/, ""))}
                       placeholder=""
                       className="w-full h-12 px-4 rounded-full border border-[#121212]/10 bg-transparent text-[#121212] outline-none focus:border-[#121212]/30 transition-colors"
                     />
@@ -538,18 +454,13 @@ export function SendModal({
                 )}
               </div>
 
-              {/* Amount Details */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Amount</span>
-                  <span className="text-[#121212]">
-                    {formatNumber(numAmount)} USDC
-                  </span>
+                  <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
                 </div>
                 {((recipientType === "wallet" && isValidAddress) ||
                   (recipientType === "x" && isValidXHandle)) &&
-                  // Hide the row entirely while auto is still resolving;
-                  // show once a protocol is known (auto-resolved or manual)
                   (provider !== "auto" || autoResolved) && (
                   <>
                     <div className="flex justify-between items-center">
@@ -568,22 +479,13 @@ export function SendModal({
                         ) : (
                           <ProtocolBadge providerId={provider as ProviderId} />
                         )}
-                        <Image
-                          src="/assets/chevron-down-icon.svg"
-                          alt=""
-                          width={10}
-                          height={10}
-                          className="-rotate-90"
-                        />
+                        <Image src="/assets/chevron-down-icon.svg" alt="" width={10} height={10} className="-rotate-90" />
                       </button>
                     </div>
                     {provider === "umbra" && umbraStatus === "unregistered" && (
                       <p className="text-xs text-[#121212]/50">
                         Enable Umbra in your{" "}
-                        <a
-                          href="/p"
-                          className="underline underline-offset-2 decoration-dashed hover:text-[#121212]"
-                        >
+                        <a href="/p" className="underline underline-offset-2 decoration-dashed hover:text-[#121212]">
                           profile
                         </a>{" "}
                         to send via Umbra.
@@ -601,48 +503,35 @@ export function SendModal({
                 <div className="flex justify-between">
                   <div>
                     <span className="text-[#121212]">Partner Fees</span>
-                    <span className="text-[#121212]/40 text-xs ml-1">
-                      ({feeBreakdown})
-                    </span>
+                    <span className="text-[#121212]/40 text-xs ml-1">({feeBreakdown})</span>
                   </div>
-                  <span className="text-[#121212]">
-                    ~{formatNumber(partnerFee)} USDC
-                  </span>
+                  <span className="text-[#121212]">~{formatNumber(partnerFee)} USDC</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#121212] font-semibold">
-                    They Receive
-                  </span>
-                  <span className="text-[#121212] font-semibold">
-                    ~{formatNumber(total)} USDC
-                  </span>
+                  <span className="text-[#121212] font-semibold">They Receive</span>
+                  <span className="text-[#121212] font-semibold">~{formatNumber(total)} USDC</span>
                 </div>
               </div>
 
-              {/* Proceed Button */}
               <motion.button
                 onClick={handleProceed}
                 disabled={
                   !canProceed ||
                   isResolvingX ||
                   umbraBlockedByRecipient ||
-                  // Block until a protocol is actually chosen (auto-resolved
-                  // counts). Covers loading + router failure cases.
                   (provider === "auto" &&
                     (noAutoTarget || autoUnavailable || !autoResolved))
                 }
                 whileTap={{ scale: 0.98 }}
-                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
               >
                 {isResolvingX ? "Resolving..." : "Proceed"}
               </motion.button>
 
-              {/* Generate Claim Link - continues in this same modal (claim
-                  mode); invisible for X sends */}
               <button
                 onClick={() => setMode("claim")}
                 disabled={recipientType === "x"}
-                className={`w-full mt-4 text-[#121212]/70 text-sm underline underline-offset-4 decoration-dashed hover:text-[#121212] transition-colors ${recipientType === "x" ? "invisible pointer-events-none" : ""}`}
+                className={`w-full mt-4 text-[#121212]/70 text-sm underline underline-offset-4 decoration-dashed hover:text-[#121212] transition-colors cursor-pointer ${recipientType === "x" ? "invisible pointer-events-none" : ""}`}
               >
                 Generate a claim link
               </button>
@@ -670,9 +559,7 @@ export function SendModal({
                   : "Processing transaction..."}
               </p>
               {provider === "umbra" && umbraSendState.stage === "depositing" && (
-                <p className="mt-1 text-[#121212]/50 text-xs">
-                  ~3 wallet prompts total
-                </p>
+                <p className="mt-1 text-[#121212]/50 text-xs">~3 wallet prompts total</p>
               )}
             </motion.div>
           )}
@@ -684,7 +571,6 @@ export function SendModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Success Details */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Sent To</span>
@@ -692,38 +578,24 @@ export function SendModal({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Amount</span>
-                  <span className="text-[#121212]">
-                    {formatNumber(numAmount)} USDC
-                  </span>
+                  <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Partner Fees</span>
-                  <span className="text-[#121212]">
-                    ~{formatNumber(partnerFee)} USDC
-                  </span>
+                  <span className="text-[#121212]">~{formatNumber(partnerFee)} USDC</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#121212] font-semibold">
-                    They Receive
-                  </span>
-                  <span className="text-[#121212] font-semibold">
-                    ~{formatNumber(total)} USDC
-                  </span>
+                  <span className="text-[#121212] font-semibold">They Receive</span>
+                  <span className="text-[#121212] font-semibold">~{formatNumber(total)} USDC</span>
                 </div>
               </div>
 
-              {/* Success Button */}
               <motion.button
                 onClick={handleClose}
                 whileTap={{ scale: 0.98 }}
-                className="w-full h-10 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+                className="w-full h-10 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
               >
-                <Image
-                  src="/assets/success-alt.svg"
-                  alt="Success"
-                  width={24}
-                  height={24}
-                />
+                <Image src="/assets/success-alt.svg" alt="Success" width={24} height={24} />
               </motion.button>
             </motion.div>
           )}
@@ -739,16 +611,14 @@ export function SendModal({
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
                 <span className="text-red-500 text-2xl">!</span>
               </div>
-              <p className="text-[#121212] font-medium mb-2">
-                Transaction Failed
-              </p>
+              <p className="text-[#121212] font-medium mb-2">Transaction Failed</p>
               <p className="text-[#121212]/60 text-sm text-center mb-6">
                 {errorMessage || "Something went wrong"}
               </p>
               <motion.button
                 onClick={handleRetry}
                 whileTap={{ scale: 0.98 }}
-                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+                className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
               >
                 Try Again
               </motion.button>
@@ -776,7 +646,6 @@ export function SendModal({
         )}
       </Modal>
 
-      {/* QR Scanner Modal */}
       {showQRScanner && (
         <QRScanner
           isOpen={showQRScanner}

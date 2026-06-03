@@ -8,10 +8,14 @@ const sender = Keypair.fromSecretKey(
 );
 const recipient = sender.publicKey;
 
-const { burnerKeypair, encryptedData } = await createBurnerWallet(
-  recipient,
-  sender.publicKey
-);
+async function main() {
+  const { burnerKeypair, encryptedData } = await createBurnerWallet(
+    recipient,
+    sender.publicKey
+  );
 
-console.log("Burner:", burnerKeypair.publicKey.toBase58());
-console.log("Encrypted OK:", !!encryptedData);
+  console.log("Burner:", burnerKeypair.publicKey.toBase58());
+  console.log("Encrypted OK:", !!encryptedData);
+}
+
+main().catch(console.error);

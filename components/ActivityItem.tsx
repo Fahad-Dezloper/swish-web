@@ -28,7 +28,6 @@ export interface Stats {
   total_claimed: number;
 }
 
-// Status colors
 const STATUS_COLORS: Record<Activity["status"], string> = {
   open: "#CB9C00",
   processing: "#CB9C00",

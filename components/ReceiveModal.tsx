@@ -21,16 +21,9 @@ interface ReceiveModalProps {
 }
 
 type ModalState = "input" | "loading" | "success" | "error";
-// Within "input", the user enters an amount first, then the message.
 type EntryStep = "amount" | "form";
 
-export function ReceiveModal({
-  isOpen,
-  onClose,
-}: ReceiveModalProps) {
-  // Request creation is protocol-agnostic — sign with the Swish-scoped
-  // request session sig instead of any protocol's text. The parent prop
-  // `getSignature` (PC by default) is ignored here.
+export function ReceiveModal({ isOpen, onClose }: ReceiveModalProps) {
   const { getSignature } = useSessionSignature("request");
   const [amount, setAmount] = useState("0");
   const [entryStep, setEntryStep] = useState<EntryStep>("amount");
@@ -43,7 +36,6 @@ export function ReceiveModal({
   const hasValidAmount = numAmount > 0;
 
   const handleNumberPress = (num: string) => {
-    // USDC for now; pass the selected asset's symbol once it's selectable.
     setAmount((prev) => appendAmountKey(prev, num, decimalsForAsset("USDC")));
   };
 
@@ -54,9 +46,7 @@ export function ReceiveModal({
       setAmount(amount.slice(0, -1));
     }
   };
-  // Requester doesn't pick a protocol — the payer picks at fulfill time.
-  // Show worst-case fee (PC, the auto-router default). Other protocols
-  // may charge less (MB ~0, Umbra 0).
+
   const { feeUSDC: partnerFee, breakdown: feeBreakdown } = useProtocolFee(
     "auto",
     numAmount,
@@ -133,7 +123,6 @@ export function ReceiveModal({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Image src="/assets/receive.svg" alt="Request" width={24} height={24} className="invert" />
         <h2 className="text-2xl font-semibold text-[#121212]">Request</h2>
@@ -147,7 +136,6 @@ export function ReceiveModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Amount entry */}
             <div className="mb-6">
               <AmountField amount={amount} assetSymbol="USDC" />
             </div>
@@ -163,7 +151,7 @@ export function ReceiveModal({
               onClick={() => setEntryStep("form")}
               disabled={!hasValidAmount}
               whileTap={{ scale: 0.98 }}
-              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
               Continue
             </motion.button>
@@ -177,22 +165,14 @@ export function ReceiveModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Back to amount entry */}
             <button
               onClick={() => setEntryStep("amount")}
-              className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
+              className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors cursor-pointer"
             >
-              <Image
-                src="/assets/chevron-down-icon.svg"
-                alt=""
-                width={10}
-                height={10}
-                className="rotate-90"
-              />
+              <Image src="/assets/chevron-down-icon.svg" alt="" width={10} height={10} className="rotate-90" />
               Edit amount
             </button>
 
-            {/* Message Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-2 block">
                 Add message (optional)
@@ -214,7 +194,6 @@ export function ReceiveModal({
               </div>
             </div>
 
-            {/* Amount Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -230,11 +209,10 @@ export function ReceiveModal({
               </div>
             </div>
 
-            {/* Proceed Button */}
             <motion.button
               onClick={handleProceed}
               whileTap={{ scale: 0.98 }}
-              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
               Proceed
             </motion.button>
@@ -261,7 +239,6 @@ export function ReceiveModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Success Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -277,16 +254,15 @@ export function ReceiveModal({
               </div>
             </div>
 
-            {/* Copy Link Button */}
             <motion.button
               onClick={copied ? undefined : handleCopyLink}
               whileTap={copied ? {} : { scale: 0.98 }}
-              className={`w-full h-10 bg-[#121212] rounded-full flex items-center justify-center gap-2 text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)] ${copied ? "pointer-events-none" : ""}`}
+              className={`w-full h-10 bg-[#121212] rounded-full flex items-center justify-center gap-2 text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)] ${copied ? "pointer-events-none" : "cursor-pointer"}`}
             >
               <Image
                 src={copied ? "/assets/success.svg" : "/assets/copy-icon.svg"}
                 alt=""
-                width={copied ? 16 : 16}
+                width={16}
                 height={copied ? 8 : 16}
                 className={copied ? "" : "invert"}
               />
@@ -313,7 +289,7 @@ export function ReceiveModal({
             <motion.button
               onClick={handleRetry}
               whileTap={{ scale: 0.98 }}
-              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+              className="w-full h-10 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
               Try Again
             </motion.button>

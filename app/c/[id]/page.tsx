@@ -37,17 +37,11 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
   const { login, authenticated, ready } = usePrivy();
   const [claimData, setClaimData] = useState<ClaimData | null>(null);
 
-  // Pick the session-sig hook variant matching the row's provider so the
-  // wallet popup shows the protocol-matching message text. Defaults to PC
-  // until claim data loads.
   const reclaimProvider: ProviderId =
     claimData?.providerId && isProviderId(claimData.providerId)
       ? (claimData.providerId as ProviderId)
       : DEFAULT_PROVIDER_ID;
   const { walletAddress, getSignature } = useSessionSignature(reclaimProvider);
-  // Fee shown reflects the row's actual protocol — PC has its dynamic base
-  // + 0.35%, MB charges only gas, Umbra is 0.7% on claim. Hook is called
-  // unconditionally (claimData=null → amount=0, value isn't rendered yet).
   const { feeUSDC: partnerFee } = useProtocolFee(
     reclaimProvider,
     claimData?.amount ?? 0,
@@ -58,11 +52,7 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Wait for Privy to finish hydrating before any fetch — otherwise an
-    // unauthenticated-looking first render fires a no-wallet fetch that
-    // can race-overwrite the correct one when wallet eventually loads.
     if (!ready) return;
-    // Then, if authenticated, wait for walletAddress so isSender is reliable.
     if (authenticated && !walletAddress) return;
 
     async function fetchClaimData() {
@@ -104,9 +94,7 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
       login();
       return;
     }
-    if (!walletAddress) {
-      return;
-    }
+    if (!walletAddress) return;
     setShowPassphraseModal(true);
   };
 
@@ -190,7 +178,7 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
         <motion.button
           onClick={() => setPageState("ready")}
           whileTap={{ scale: 0.98 }}
-          className="mt-4 px-6 h-10 bg-[#121212] rounded-full text-[#fafafa] font-semibold"
+          className="mt-4 px-6 h-10 bg-[#121212] rounded-full text-[#fafafa] font-semibold cursor-pointer"
         >
           Try Again
         </motion.button>
@@ -245,7 +233,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
   return (
     <>
       <main className="flex flex-col items-center p-4 w-full">
-        {/* Amount Display */}
         <div className="flex flex-col items-center mb-6 w-full max-w-full">
           <div className="w-full max-w-[320px] overflow-x-auto scrollbar-hide">
             <p className="text-6xl font-light text-[#121212] text-center">
@@ -253,9 +240,7 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
             </p>
           </div>
           {claimData.message && (
-            <p className="mt-2 text-[#121212]/50 text-sm">
-              {claimData.message}
-            </p>
+            <p className="mt-2 text-[#121212]/50 text-sm">{claimData.message}</p>
           )}
         </div>
 
@@ -263,7 +248,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
           <AccountChip compact />
         </div>
 
-        {/* Details */}
         <div className="w-full max-w-[320px] space-y-2 mb-8">
           {senderProviderId && (
             <div className="flex justify-between">
@@ -285,41 +269,37 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </div>
 
-        {/* Claim Button (for receivers) */}
         {pageState === "ready" && (!authenticated || !claimData?.isSender) && (
           <motion.button
             onClick={handleClaim}
             whileTap={{ scale: 0.98 }}
-            className="w-full max-w-[320px] h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+            className="w-full max-w-[320px] h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
           >
             Claim
           </motion.button>
         )}
 
-        {/* Reclaim Button (for sender only) */}
         {pageState === "ready" && authenticated && claimData?.isSender && (
           <motion.button
             onClick={handleReclaim}
             whileTap={{ scale: 0.98 }}
-            className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#CB0000] rounded-full flex items-center justify-center text-[#CB0000] font-semibold shadow-[0_2px_8px_rgba(203,0,0,0.1)]"
+            className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#CB0000] rounded-full flex items-center justify-center text-[#CB0000] font-semibold cursor-pointer shadow-[0_2px_8px_rgba(203,0,0,0.1)]"
           >
             Reclaim
           </motion.button>
         )}
 
-        {/* Success State */}
         {pageState === "success" && (
           <motion.button
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+            className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
           >
             <Image src="/assets/success-alt.svg" alt="Success" width={24} height={24} />
           </motion.button>
         )}
       </main>
 
-      {/* Passphrase Modal */}
       {showPassphraseModal && claimData && walletAddress && (
         <ClaimPassphraseModal
           isOpen={showPassphraseModal}

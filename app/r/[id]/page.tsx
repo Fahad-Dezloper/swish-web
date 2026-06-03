@@ -61,12 +61,8 @@ export default function RequestPage({
   const { wallets } = useWallets();
   const { walletAddress, getSignature } = useSessionSignature();
   const { balance: payerBalance } = useUSDCBalance(walletAddress);
-  // Mint MB session sig — when payer picks MB, server expects MB-signed sig.
-  const { getSignature: getMbSessionSignature } =
-    useSessionSignature("magicblock-per");
-  // Request cancel is protocol-agnostic — uses the Swish request session sig.
-  const { getSignature: getRequestSessionSignature } =
-    useSessionSignature("request");
+  const { getSignature: getMbSessionSignature } = useSessionSignature("magicblock-per");
+  const { getSignature: getRequestSessionSignature } = useSessionSignature("request");
   const [requestData, setRequestData] = useState<RequestData | null>(null);
   const [pageState, setPageState] = useState<PageState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -78,9 +74,6 @@ export default function RequestPage({
     "idle" | "checking" | "registered" | "unregistered" | "error"
   >("idle");
 
-  // Resolve Auto for the payer once we know both addresses (payer's
-  // wallet + requester's address from the row). The hook gracefully
-  // sits idle when inputs aren't ready.
   const noAutoTarget = areAllProvidersDisabled(FULFILL_PROVIDER_POOL);
   const { resolved: autoResolved, unavailable: autoUnavailable } = useAutoRoute({
     enabled: provider === "auto" && !!requestData?.receiverAddress,
@@ -89,14 +82,9 @@ export default function RequestPage({
     receiverAddress: requestData?.receiverAddress ?? null,
   });
 
-  // Effective provider for fee + dispatch. When picker is Auto and we've
-  // resolved, use the resolved one; otherwise fall back to "auto" (fee
-  // hook treats as PC worst-case).
   const effectiveProvider: ProviderId | "auto" =
     provider === "auto" ? (autoResolved ?? "auto") : provider;
 
-  // Per-protocol fee, driven by the effective provider so Auto reflects
-  // its resolved route's fee instead of PC worst-case.
   const { feeUSDC: partnerFee, breakdown: feeBreakdown } = useProtocolFee(
     effectiveProvider,
     requestData?.amount ?? 0,
@@ -138,9 +126,6 @@ export default function RequestPage({
     fetchRequestData();
   }, [id]);
 
-  // Pre-check requester's Umbra registration so the picker can disable
-  // Umbra upfront instead of letting the fulfill fail at runtime. We don't
-  // surface the result in any visible copy — only used to gate the picker.
   useEffect(() => {
     const addr = requestData?.receiverAddress;
     if (!addr) {
@@ -160,9 +145,7 @@ export default function RequestPage({
           return;
         }
         const json = (await res.json()) as { registered: boolean };
-        setRequesterUmbraStatus(
-          json.registered ? "registered" : "unregistered"
-        );
+        setRequesterUmbraStatus(json.registered ? "registered" : "unregistered");
       } catch {
         if (!cancelled) setRequesterUmbraStatus("error");
       }
@@ -178,18 +161,12 @@ export default function RequestPage({
       return;
     }
 
-    if (!requestData?.receiverAddress) {
-      return;
-    }
+    if (!requestData?.receiverAddress) return;
 
     setPageState("processing");
     setErrorMessage(null);
 
     try {
-      // Resolve Auto if needed. For wallet-mode payers (always the case
-      // on /r since requester is always a wallet address), useAutoRoute
-      // has already resolved by the time the user clicks Pay — so this
-      // only fires the preview fetch as a defensive fallback.
       let dispatchProvider: ProviderId | "auto" = effectiveProvider;
       if (provider === "auto" && dispatchProvider === "auto") {
         const previewRes = await fetch(
@@ -197,15 +174,11 @@ export default function RequestPage({
             walletAddress || ""
           )}&receiver=${encodeURIComponent(requestData.receiverAddress)}`
         );
-        const previewJson = (await previewRes.json()) as {
-          providerId: ProviderId;
-        };
+        const previewJson = (await previewRes.json()) as { providerId: ProviderId };
         dispatchProvider = previewJson.providerId;
       }
 
       if (dispatchProvider === "umbra") {
-        // Client-side Umbra fulfill: 3 wallet prompts, requester must be
-        // registered. Fail-fast inside the hook if not.
         const baseUnits = BigInt(Math.floor(requestData.amount * 1_000_000));
         await umbraFulfill({
           activityId: id,
@@ -216,8 +189,6 @@ export default function RequestPage({
         return;
       }
 
-      // Inner helper — runs the full prepare→sign→submit cycle for a
-      // given non-Umbra provider. Throws on any step's failure.
       const runMbOrPc = async (target: ProviderId) => {
         const session =
           target === "magicblock-per"
@@ -284,11 +255,7 @@ export default function RequestPage({
         }
       };
 
-      // No silent fallback: if the resolved provider fails, surface the
-      // error and let the user retry. Auto-switching protocols changes the
-      // fee the user agreed to without consent.
       await runMbOrPc(dispatchProvider as ProviderId);
-
       setPageState("success");
     } catch (error: any) {
       console.error("Pay request failed:", error);
@@ -297,7 +264,6 @@ export default function RequestPage({
     }
   };
 
-  // Check if current user is the requestor (owner of this request)
   const isRequestor =
     authenticated &&
     walletAddress &&
@@ -382,7 +348,7 @@ export default function RequestPage({
         <motion.button
           onClick={() => setPageState("ready")}
           whileTap={{ scale: 0.98 }}
-          className="mt-4 px-6 h-10 bg-[#121212] rounded-full text-[#fafafa] font-semibold"
+          className="mt-4 px-6 h-10 bg-[#121212] rounded-full text-[#fafafa] font-semibold cursor-pointer"
         >
           Try Again
         </motion.button>
@@ -438,9 +404,7 @@ export default function RequestPage({
         {pageState === "processing" &&
           provider === "umbra" &&
           umbraFulfillState.stage === "depositing" && (
-            <p className="mt-1 text-[#121212]/50 text-xs">
-              ~3 wallet prompts total
-            </p>
+            <p className="mt-1 text-[#121212]/50 text-xs">~3 wallet prompts total</p>
           )}
       </main>
     );
@@ -449,8 +413,6 @@ export default function RequestPage({
   if (!requestData) return null;
 
   const requestorReceives = requestData.amount - partnerFee;
-  // Payer must hold at least the request total (fee is taken from what the
-  // requester receives). Only gates the payer, not the requestor.
   const insufficientBalance =
     authenticated &&
     !isRequestor &&
@@ -459,7 +421,6 @@ export default function RequestPage({
 
   return (
     <main className="flex flex-col items-center p-4 w-full">
-      {/* Amount Display */}
       <div className="flex flex-col items-center mb-6 w-full max-w-full">
         <div className="w-full max-w-[320px] overflow-x-auto scrollbar-hide">
           <p className="text-6xl font-light text-[#121212] text-center">
@@ -467,9 +428,7 @@ export default function RequestPage({
           </p>
         </div>
         {requestData.message && (
-          <p className="mt-2 text-[#121212]/50 text-sm">
-            {requestData.message}
-          </p>
+          <p className="mt-2 text-[#121212]/50 text-sm">{requestData.message}</p>
         )}
       </div>
 
@@ -477,7 +436,6 @@ export default function RequestPage({
         <AccountChip compact />
       </div>
 
-      {/* Details */}
       <div className="w-full max-w-[320px] space-y-2 mb-8">
         {!isRequestor && (provider !== "auto" || autoResolved) && (
           <div className="flex justify-between items-center">
@@ -514,19 +472,13 @@ export default function RequestPage({
         <div className="flex justify-between">
           <div>
             <span className="text-[#121212]">Partner fees</span>
-            <span className="text-[#121212]/40 text-xs ml-1">
-              ({feeBreakdown})
-            </span>
+            <span className="text-[#121212]/40 text-xs ml-1">({feeBreakdown})</span>
           </div>
-          <span className="text-[#121212]">
-            ~{formatNumber(partnerFee)} USDC
-          </span>
+          <span className="text-[#121212]">~{formatNumber(partnerFee)} USDC</span>
         </div>
         <div className="flex justify-between">
           <span className="text-[#121212]">{isRequestor ? "You receive" : "They receive"}</span>
-          <span className="text-[#121212]">
-            ~{formatNumber(requestorReceives)} USDC
-          </span>
+          <span className="text-[#121212]">~{formatNumber(requestorReceives)} USDC</span>
         </div>
         <div className="flex justify-between">
           <span className="text-[#121212] font-semibold">Total</span>
@@ -536,63 +488,46 @@ export default function RequestPage({
         </div>
       </div>
 
-      {/* Insufficient balance hint (payer only) */}
       {pageState === "ready" && insufficientBalance && (
-        <p className="text-[#CB0000] text-sm mb-3 text-center">
-          Insufficient balance
-        </p>
+        <p className="text-[#CB0000] text-sm mb-3 text-center">Insufficient balance</p>
       )}
 
-      {/* Pay Button (for payers) or Cancel Button (for requestor) */}
       {pageState === "ready" && !isRequestor && (
         <motion.button
           onClick={handlePay}
           disabled={
-            // Wait for the route to resolve before allowing Pay — but only
-            // once connected, so a logged-out visitor can still tap to log in.
             (authenticated &&
               provider === "auto" &&
               (noAutoTarget || autoUnavailable || !autoResolved)) ||
             insufficientBalance
           }
           whileTap={{ scale: 0.98 }}
-          className="w-full max-w-[320px] h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+          className="w-full max-w-[320px] h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
         >
           Pay
         </motion.button>
       )}
 
-      {/* Cancel Button (for requestor only) */}
       {pageState === "ready" && isRequestor && (
         <motion.button
           onClick={handleCancel}
           whileTap={{ scale: 0.98 }}
-          className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#CB0000] rounded-full flex items-center justify-center text-[#CB0000] font-semibold shadow-[0_2px_8px_rgba(203,0,0,0.1)]"
+          className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#CB0000] rounded-full flex items-center justify-center text-[#CB0000] font-semibold cursor-pointer shadow-[0_2px_8px_rgba(203,0,0,0.1)]"
         >
           Cancel Request
         </motion.button>
       )}
 
-      {/* Success State */}
       {pageState === "success" && (
         <motion.button
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+          className="w-full max-w-[320px] h-12 bg-[#fafafa] border border-[#121212]/70 rounded-full flex items-center justify-center cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
         >
-          <Image
-            src="/assets/success-alt.svg"
-            alt="Success"
-            width={24}
-            height={24}
-          />
+          <Image src="/assets/success-alt.svg" alt="Success" width={24} height={24} />
         </motion.button>
       )}
 
-      {/* Protocol picker — same Modal frame as the rest of the app. The
-          relative, bounded wrapper (with negative margins to cancel Modal's
-          padding) gives the sidebar's `absolute inset-0` a box to fill, and
-          slideIn=false lets the modal do the entrance animation. */}
       <Modal isOpen={pickerOpen} onClose={() => setPickerOpen(false)}>
         <div className="relative h-[60vh] max-h-[500px] -mx-6 -mb-8 -mt-1">
           <ProtocolSidebar

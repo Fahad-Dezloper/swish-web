@@ -29,9 +29,7 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
         runningRef.current = false;
         try {
           await scannerRef.current.stop();
-        } catch {
-          // already stopped
-        }
+        } catch {}
       }
       scannerRef.current = null;
     };
@@ -43,16 +41,10 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
 
         await scanner.start(
           { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-          },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
           (decodedText) => {
             if (!mounted) return;
-
-            // Strip solana: prefix if present
             const text = decodedText.replace(/^solana:/, "");
-
             try {
               new PublicKey(text);
               stopScanner();
@@ -63,7 +55,7 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
               setTimeout(() => setError(null), 2000);
             }
           },
-          () => {} // ignore scan failures (no QR detected yet)
+          () => {}
         );
         runningRef.current = true;
       } catch (err: any) {
@@ -73,7 +65,6 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
       }
     };
 
-    // Small delay to ensure DOM element exists
     const timeout = setTimeout(startScanner, 100);
 
     return () => {
@@ -108,7 +99,7 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
       <motion.button
         onClick={onClose}
         whileTap={{ scale: 0.98 }}
-        className="w-full h-10 mt-4 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+        className="w-full h-10 mt-4 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
       >
         Cancel
       </motion.button>

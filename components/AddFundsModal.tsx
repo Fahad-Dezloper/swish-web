@@ -24,19 +24,14 @@ export function AddFundsModal({
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback
-    }
+    } catch {}
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="flex flex-col items-center">
-        <h2 className="text-2xl font-semibold text-[#121212] mb-6">
-          Deposit
-        </h2>
+        <h2 className="text-2xl font-semibold text-[#121212] mb-6">Deposit</h2>
 
-        {/* QR Code */}
         <div className="bg-white p-4 rounded-2xl mb-6">
           <QRCodeSVG
             value={walletAddress}
@@ -46,10 +41,9 @@ export function AddFundsModal({
           />
         </div>
 
-        {/* Address */}
         <button
           onClick={copied ? undefined : handleCopy}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full bg-[#121212]/5 transition-colors mb-3 max-w-full ${copied ? "pointer-events-none" : "hover:bg-[#121212]/10"}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full bg-[#121212]/5 transition-colors mb-3 max-w-full ${copied ? "pointer-events-none" : "hover:bg-[#121212]/10 cursor-pointer"}`}
         >
           <span className="text-[#121212] text-sm font-mono truncate">
             {walletAddress}
@@ -57,7 +51,7 @@ export function AddFundsModal({
           <Image
             src={copied ? "/assets/success-alt.svg" : "/assets/copy-icon.svg"}
             alt=""
-            width={copied ? 16 : 16}
+            width={16}
             height={copied ? 8 : 16}
             className="shrink-0"
           />

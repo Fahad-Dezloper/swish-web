@@ -4,7 +4,6 @@ import "./globals.css";
 import Providers from "./providers";
 import { Logo, Footer, MaintenanceBanner } from "@/components";
 
-// Force dynamic rendering for all pages - required for Privy auth
 export const dynamic = "force-dynamic";
 
 const jost = Jost({
@@ -45,17 +44,12 @@ export default function RootLayout({
           <div className="mx-auto w-full max-w-107.5 min-h-screen bg-[#fafafa] relative">
             <div className="min-h-screen flex flex-col">
               <MaintenanceBanner />
-              {/* Header with Logo */}
               <header className="flex justify-center pt-8 pb-4">
                 <Logo />
               </header>
-
-              {/* Main Content */}
               <div className="flex-1 flex items-center justify-center">
                 {children}
               </div>
-
-              {/* Footer Navigation */}
               <Footer />
             </div>
           </div>

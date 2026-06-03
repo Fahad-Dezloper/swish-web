@@ -2,11 +2,6 @@
 
 import Image from "next/image";
 
-/**
- * One asset line: icon · symbol / native amount · ~USD. Shared by the
- * AccountChip dropdown and the Profile wallet tab so they stay identical.
- * `native` and `usd` are pre-formatted strings (so callers handle loading).
- */
 export function AssetRow({
   icon,
   symbol,
