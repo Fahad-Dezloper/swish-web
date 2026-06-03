@@ -75,10 +75,8 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: [
-          // CSP ships REPORT-ONLY first — logs violations, blocks nothing.
-          // Validate every flow, tighten from the console, then switch the key
-          // to "Content-Security-Policy" to enforce.
-          { key: "Content-Security-Policy-Report-Only", value: csp },
+          // CSP enforced — Report-Only run was clean (no violations in prod).
+          { key: "Content-Security-Policy", value: csp },
           // Safe to enforce immediately.
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
