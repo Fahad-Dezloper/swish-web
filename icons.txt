@@ -1,0 +1,10 @@
+brand icons library for swish
+
+Priority
+https://hugeicons.com/icons
+
+
+More for testing to match the brand
+https://lucide.dev/
+https://phosphoricons.com/
+https://fontawesome.com/
