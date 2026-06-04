@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Self-hosted worker (copied from pdfjs-dist@5.4.296, matching react-pdf's
+// bundled version). CDN URLs are blocked by our enforced CSP (worker-src
+// 'self' blob:), so the worker must be same-origin. Re-copy on pdfjs upgrade:
+//   cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.mjs
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 const PDF_FILE = "/pitch.pdf";
 const MAX_WIDTH = 1280;
