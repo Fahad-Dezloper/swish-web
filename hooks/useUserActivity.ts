@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import useSWR, { mutate } from "swr";
 import type { Activity, Stats } from "@/components";
 
 interface UserData {
@@ -8,33 +8,28 @@ interface UserData {
   stats: Stats;
 }
 
-/**
- * Fetches the signed-in user's activity + stats from
- * `GET /api/activity/user?address=`. Shared by the home recent-activity
- * preview and the Profile activity tab.
- */
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error("Failed to fetch activity");
+    return r.json();
+  });
+
+export const activityKey = (walletAddress: string) =>
+  `/api/activity/user?address=${walletAddress}`;
+
 export function useUserActivity(walletAddress: string | null | undefined) {
-  const [data, setData] = useState<UserData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const key = walletAddress ? activityKey(walletAddress) : null;
 
-  const refetch = useCallback(async () => {
-    if (!walletAddress) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/activity/user?address=${walletAddress}`);
-      if (res.ok) {
-        setData(await res.json());
-      }
-    } catch (error) {
-      console.error("Error fetching user activity:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [walletAddress]);
+  const { data, isLoading } = useSWR<UserData>(key, fetcher, {
+    keepPreviousData: true,
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+    refreshInterval: 30_000,
+  });
 
-  useEffect(() => {
-    if (walletAddress) refetch();
-  }, [walletAddress, refetch]);
+  const refetch = () => {
+    if (walletAddress) mutate(activityKey(walletAddress));
+  };
 
   return {
     activities: data?.activities ?? [],

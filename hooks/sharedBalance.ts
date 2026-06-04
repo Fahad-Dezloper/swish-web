@@ -10,23 +10,15 @@ export interface BalanceEntry<T> {
 
 const EMPTY = { value: null, isLoading: false, error: null } as const;
 
-/**
- * Builds a balance hook backed by a single shared cache keyed by wallet
- * address. All components calling the returned hook for the same address
- * share one cache entry, so:
- *  - a `refetch()` from anywhere updates everyone (instant balance after a
- *    send/withdraw, on home + profile + the account chip at once), and
- *  - one poll per address (not per component) keeps it fresh, so incoming
- *    deposits show up on their own within `pollMs`.
- */
 export function createSharedBalance<T>(
   fetcher: (address: string) => Promise<T>,
-  pollMs?: number
+  pollMs?: number,
 ) {
   const store = new Map<string, BalanceEntry<T>>();
   const subs = new Map<string, Set<() => void>>();
   const inflight = new Map<string, Promise<void>>();
   const pollers = new Map<string, ReturnType<typeof setInterval>>();
+  const visListeners = new Map<string, () => void>();
 
   const snap = (a: string): BalanceEntry<T> =>
     store.get(a) ?? (EMPTY as BalanceEntry<T>);
@@ -47,7 +39,7 @@ export function createSharedBalance<T>(
           value: null,
           isLoading: false,
           error: e?.message ?? "Failed to fetch balance",
-        })
+        }),
       )
       .finally(() => inflight.delete(address));
     inflight.set(address, p);
@@ -64,22 +56,31 @@ export function createSharedBalance<T>(
           subs.set(address, set);
         }
         set.add(cb);
-        // First subscriber for this address kicks off the fetch + poll.
+
         if (!store.has(address)) fetchFor(address);
+
         if (pollMs && !pollers.has(address)) {
           pollers.set(
             address,
             setInterval(() => {
-              // Skip while the tab is hidden — no point burning RPC.
               if (
                 typeof document !== "undefined" &&
                 document.visibilityState !== "visible"
               )
                 return;
               fetchFor(address);
-            }, pollMs)
+            }, pollMs),
           );
         }
+
+        if (typeof document !== "undefined" && !visListeners.has(address)) {
+          const onVisible = () => {
+            if (document.visibilityState === "visible") fetchFor(address);
+          };
+          document.addEventListener("visibilitychange", onVisible);
+          visListeners.set(address, onVisible);
+        }
+
         return () => {
           set!.delete(cb);
           if (set!.size === 0) {
@@ -88,15 +89,20 @@ export function createSharedBalance<T>(
               clearInterval(t);
               pollers.delete(address);
             }
+            const l = visListeners.get(address);
+            if (l) {
+              document.removeEventListener("visibilitychange", l);
+              visListeners.delete(address);
+            }
           }
         };
       },
-      [address]
+      [address],
     );
 
     const getSnapshot = useCallback(
       () => (address ? snap(address) : (EMPTY as BalanceEntry<T>)),
-      [address]
+      [address],
     );
 
     const entry = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);

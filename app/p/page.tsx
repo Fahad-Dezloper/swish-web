@@ -48,7 +48,8 @@ export default function ProfilePage() {
   };
 
   const { status: umbraStatus, refetch: refetchUmbraStatus } = useUmbraStatus();
-  const { register: registerUmbra, state: umbraRegisterState } = useUmbraRegister();
+  const { register: registerUmbra, state: umbraRegisterState } =
+    useUmbraRegister();
   const isUmbraRegistered = umbraStatus === "registered";
   const {
     totalUSDC: umbraBalanceUSDC,
@@ -66,7 +67,7 @@ export default function ProfilePage() {
     isLoading,
   } = useUserActivity(walletAddress);
   const [activeTab, setActiveTab] = useState<TabType>(
-    searchParams.get("tab") === "activity" ? "activity" : "wallet"
+    searchParams.get("tab") === "activity" ? "activity" : "wallet",
   );
 
   const selectTab = (tab: TabType) => {
@@ -162,7 +163,9 @@ export default function ProfilePage() {
                 }`}
               >
                 <Image
-                  src={copied ? "/assets/success-alt.svg" : "/assets/copy-icon.svg"}
+                  src={
+                    copied ? "/assets/success-alt.svg" : "/assets/copy-icon.svg"
+                  }
                   alt=""
                   width={16}
                   height={copied ? 8 : 16}
@@ -249,14 +252,24 @@ export default function ProfilePage() {
                 <AssetRow
                   icon="/assets/usdc-icon.svg"
                   symbol="USDC"
-                  native={usdcLoading ? "..." : `${formatNumber(usdcBalance || 0)} USDC`}
-                  usd={usdcLoading ? "..." : `$${(usdcBalance || 0).toFixed(2)}`}
+                  native={
+                    usdcLoading
+                      ? "..."
+                      : `${formatNumber(usdcBalance || 0)} USDC`
+                  }
+                  usd={
+                    usdcLoading ? "..." : `$${(usdcBalance || 0).toFixed(2)}`
+                  }
                 />
                 <AssetRow
                   icon="/assets/sol-icon.svg"
                   symbol="SOL"
-                  native={solLoading ? "..." : `${(solBalance || 0).toFixed(4)} SOL`}
-                  usd={solLoading ? "..." : `$${(solBalanceUSD || 0).toFixed(2)}`}
+                  native={
+                    solLoading ? "..." : `${(solBalance || 0).toFixed(4)} SOL`
+                  }
+                  usd={
+                    solLoading ? "..." : `$${(solBalanceUSD || 0).toFixed(2)}`
+                  }
                 />
               </div>
 
@@ -300,7 +313,8 @@ export default function ProfilePage() {
                 </div>
                 {!isUmbraRegistered && !isRegisteringUmbra && (
                   <p className="text-[#121212]/40 text-[11px] mt-2">
-                    One-time setup; you&apos;ll sign ~4–5 wallet prompts. Most of the SOL staged is auto-refunded; net cost ~$0.60.
+                    One-time setup; you&apos;ll sign ~4–5 wallet prompts. Most
+                    of the SOL staged is auto-refunded; net cost ~$0.60.
                   </p>
                 )}
                 {umbraRegisterState.error && (
@@ -314,7 +328,9 @@ export default function ProfilePage() {
                   <div className="mt-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <p className="text-[#121212]/50 text-xs">Shielded balance</p>
+                        <p className="text-[#121212]/50 text-xs">
+                          Shielded balance
+                        </p>
                         <div className="text-[#121212] text-sm font-medium h-5 flex items-center">
                           {umbraBalanceStatus === "needs-reveal" ? (
                             "Hidden"
@@ -338,7 +354,9 @@ export default function ProfilePage() {
                           whileTap={{ scale: 0.98 }}
                           className="text-xs font-semibold px-3 h-7 rounded-full bg-[#121212] text-[#fafafa] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                         >
-                          {umbraBalanceStatus === "loading" ? "Revealing…" : "Reveal"}
+                          {umbraBalanceStatus === "loading"
+                            ? "Revealing…"
+                            : "Reveal"}
                         </motion.button>
                       ) : (
                         <motion.button
@@ -356,7 +374,8 @@ export default function ProfilePage() {
                     </div>
                     {umbraBalanceStatus === "needs-reveal" && (
                       <p className="text-[#121212]/40 text-[11px] mt-2">
-                        Tap Reveal to view your shielded balance (one signature).
+                        Tap Reveal to view your shielded balance (one
+                        signature).
                       </p>
                     )}
                     {umbraBalanceStatus === "error" && umbraBalanceError && (
@@ -371,7 +390,9 @@ export default function ProfilePage() {
               {/* Stats */}
               <div className="space-y-2 border-t border-[#121212]/10 pt-4">
                 <div className="flex justify-between">
-                  <span className="text-[#121212] text-sm font-medium">Sent</span>
+                  <span className="text-[#121212] text-sm font-medium">
+                    Sent
+                  </span>
                   <span className="text-[#121212] text-sm font-medium">
                     {formatNumber(stats?.total_sent || 0)} USDC
                   </span>
@@ -389,19 +410,25 @@ export default function ProfilePage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#121212] text-sm font-medium">Received</span>
+                  <span className="text-[#121212] text-sm font-medium">
+                    Received
+                  </span>
                   <span className="text-[#121212] text-sm font-medium">
                     {formatNumber(stats?.total_received || 0)} USDC
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#121212] text-sm font-medium">Requested</span>
+                  <span className="text-[#121212] text-sm font-medium">
+                    Requested
+                  </span>
                   <span className="text-[#121212] text-sm font-medium">
                     {formatNumber(stats?.total_requested || 0)} USDC
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#121212] text-sm font-medium">Claimed</span>
+                  <span className="text-[#121212] text-sm font-medium">
+                    Claimed
+                  </span>
                   <span className="text-[#121212] text-sm font-medium">
                     {formatNumber(stats?.total_claimed || 0)} USDC
                   </span>
@@ -426,7 +453,9 @@ export default function ProfilePage() {
                 </motion.button>
                 {isXUser && (
                   <motion.button
-                    onClick={() => exportWallet({ address: walletAddress || "" })}
+                    onClick={() =>
+                      exportWallet({ address: walletAddress || "" })
+                    }
                     whileTap={{ scale: 0.98 }}
                     className="flex-1 h-10 border border-[#121212]/20 rounded-full flex items-center justify-center text-[#121212] font-semibold hover:bg-[#121212]/5 transition-colors cursor-pointer shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
                   >
