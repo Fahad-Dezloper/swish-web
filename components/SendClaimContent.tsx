@@ -98,9 +98,8 @@ export function SendClaimContent({
       setClaimLink(result.claimLink);
       setPassphrase(result.passphrase);
       setState("success");
-    } catch (error: any) {
-      console.error("Send claim failed:", error);
-      setErrorMessage(error.message || "Something went wrong");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong");
       setState("error");
     }
   };
@@ -112,9 +111,7 @@ export function SendClaimContent({
       );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("Failed to copy:", error);
-    }
+    } catch {}
   };
 
   const handleRetry = () => {

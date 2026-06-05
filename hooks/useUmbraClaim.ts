@@ -154,8 +154,6 @@ export function useUmbraClaim() {
         }
         cur = cur.cause;
       }
-      // eslint-disable-next-line no-console
-      console.error("[useUmbraClaim] error:", err);
       setState({
         stage: "error",
         claimedAmountBaseUnits: BigInt(0),

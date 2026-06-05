@@ -85,7 +85,6 @@ export function useUmbraRegister() {
 
       const client = await getBrowserUmbraClient({ signer, rpcUrl });
 
-      // Quick check first — skip prompts if already registered
       const query = getUserAccountQuerierFunction({ client });
       const existing = await query(userAddress as any);
       if (
@@ -133,8 +132,6 @@ export function useUmbraRegister() {
         }
         cur = cur.cause;
       }
-      // eslint-disable-next-line no-console
-      console.error("[useUmbraRegister] error:", err);
       reset({
         stage: "error",
         error: parts.join("\n\n---\n\n") || err?.message || String(err),

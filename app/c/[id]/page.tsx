@@ -80,8 +80,7 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
         } else {
           setPageState("ready");
         }
-      } catch (error) {
-        console.error("Error fetching claim:", error);
+      } catch {
         setPageState("error");
       }
     }
@@ -137,9 +136,8 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
       }
 
       setPageState("reclaimed");
-    } catch (error: any) {
-      console.error("Reclaim failed:", error);
-      setErrorMessage(error.message || "Something went wrong");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong");
       setPageState("error");
     }
   };

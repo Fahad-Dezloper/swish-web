@@ -60,9 +60,8 @@ export function ClaimPassphraseModal({
 
       setState("success");
       onSuccess();
-    } catch (error: any) {
-      console.error("Claim failed:", error);
-      setErrorMessage(error.message || "Failed to claim");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to claim");
       setState("error");
     }
   };

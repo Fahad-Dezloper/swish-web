@@ -25,10 +25,7 @@ export function useWithdrawTransaction(): UseWithdrawTransactionResult {
 
   const withdraw = useCallback(
     async (params: WithdrawParams): Promise<{ signature: string }> => {
-      if (!solanaWallet) {
-        throw new Error("No wallet connected");
-      }
-
+      if (!solanaWallet) throw new Error("No wallet connected");
       if (!params.signature || !params.senderPublicKey) {
         throw new Error("No session signature. Please reconnect wallet.");
       }
@@ -37,7 +34,6 @@ export function useWithdrawTransaction(): UseWithdrawTransactionResult {
       setError(null);
 
       try {
-        // Step 1: Prepare — server builds tx with sponsor as fee payer, partial-signs
         const prepareRes = await fetch("/api/withdraw", {
           method: "POST",
           headers: {
@@ -56,39 +52,25 @@ export function useWithdrawTransaction(): UseWithdrawTransactionResult {
           throw new Error(errorData.error || "Failed to prepare withdraw");
         }
 
-        const { transaction, blockhash, lastValidBlockHeight } =
-          await prepareRes.json();
+        const { transaction, blockhash, lastValidBlockHeight } = await prepareRes.json();
 
-        // Step 2: Client co-signs the partially signed tx
-        const txBytes = Uint8Array.from(atob(transaction), (c) =>
-          c.charCodeAt(0)
-        );
+        const txBytes = Uint8Array.from(atob(transaction), (c) => c.charCodeAt(0));
 
         let signedResult;
         try {
-          signedResult = await solanaWallet.signTransaction({
-            transaction: txBytes,
-          });
-        } catch (signError: any) {
-          throw new Error(signError.message || "Transaction signing rejected");
+          signedResult = await solanaWallet.signTransaction({ transaction: txBytes });
+        } catch (signError) {
+          throw new Error(signError instanceof Error ? signError.message : "Transaction signing rejected");
         }
 
         const signedTx = btoa(
-          String.fromCharCode.apply(
-            null,
-            Array.from(signedResult.signedTransaction)
-          )
+          String.fromCharCode.apply(null, Array.from(signedResult.signedTransaction))
         );
 
-        // Step 3: Submit fully signed tx
         const submitRes = await fetch("/api/withdraw/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            signedTransaction: signedTx,
-            blockhash,
-            lastValidBlockHeight,
-          }),
+          body: JSON.stringify({ signedTransaction: signedTx, blockhash, lastValidBlockHeight }),
         });
 
         if (!submitRes.ok) {
@@ -97,8 +79,8 @@ export function useWithdrawTransaction(): UseWithdrawTransactionResult {
         }
 
         return await submitRes.json();
-      } catch (err: any) {
-        const errorMessage = err.message || "Withdraw failed";
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Withdraw failed";
         setError(errorMessage);
         throw err;
       } finally {

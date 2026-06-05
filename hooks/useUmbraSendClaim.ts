@@ -49,9 +49,9 @@ export type UmbraSendClaimStage =
   | "error";
 
 export interface UmbraSendClaimParams {
-  amount: number; // display amount, e.g. 1.5 USDC
+  amount: number;
   message?: string;
-  sessionSignature: string; // base64-encoded Umbra session sig (verified by server)
+  sessionSignature: string;
   senderPublicKey: string;
 }
 
@@ -88,8 +88,6 @@ export function useUmbraSendClaim() {
       reset({ stage: "preparing-burner", error: null, detail: null });
 
       try {
-        // Stage 1: server provisions burner + registers on Umbra. Takes
-        // ~10-20s end-to-end (sponsor SOL top-up + Umbra registration).
         const prepareRes = await fetch("/api/umbra/sc/prepare", {
           method: "POST",
           headers: {
@@ -114,8 +112,6 @@ export function useUmbraSendClaim() {
             passphrase: string;
           };
 
-        // Stage 2: construct the Umbra browser client with user's
-        // wallet as IUmbraSigner. Same pattern as useUmbraSend.
         reset({ stage: "constructing-client", detail: null });
 
         const userAddress = connectedWallets[0]?.address;
@@ -143,10 +139,6 @@ export function useUmbraSendClaim() {
 
         const client = await getBrowserUmbraClient({ signer, rpcUrl });
 
-        // Stage 3: pre-flight check that burner is fully registered on
-        // Umbra. Server just registered it, but Arcium MPC settlement
-        // for RegisterUserForAnonymousUsageV11 is async — give it a
-        // few retries before failing.
         reset({ stage: "checking-burner", detail: burnerAddress });
         const query = getUserAccountQuerierFunction({ client });
         const POLL_INTERVAL_MS = 2_000;
@@ -171,9 +163,6 @@ export function useUmbraSendClaim() {
           );
         }
 
-        // Stage 4: Umbra Direct Send to burner. SDK triggers 1 consent
-        // (signMessage) then 2 deposit txs (signTransaction). User
-        // sees 3 wallet prompts.
         reset({
           stage: "depositing",
           detail: "Sign each prompt to complete the private send (~3 prompts)",
@@ -195,8 +184,6 @@ export function useUmbraSendClaim() {
           mint: USDC_MINT as any,
         });
 
-        // Stage 5: tell the server the deposit landed → server flips
-        // activity row to `open` and returns claim link.
         reset({ stage: "recording", detail: null });
         const recordRes = await fetch("/api/umbra/sc/record", {
           method: "POST",
@@ -233,8 +220,6 @@ export function useUmbraSendClaim() {
           closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
         };
       } catch (err: any) {
-        // Walk error cause chain to surface Solana sim logs (same
-        // pattern as useUmbraSend).
         const parts: string[] = [];
         let current = err;
         while (current) {
@@ -254,15 +239,11 @@ export function useUmbraSendClaim() {
                     2
                   )
               );
-            } catch {
-              // ignore
-            }
+            } catch {}
           }
           current = current.cause;
         }
         const msg = parts.join("\n\n---\n\n");
-        // eslint-disable-next-line no-console
-        console.error("[useUmbraSendClaim] error:", err);
         reset({ stage: "error", error: msg || err?.message || String(err) });
         throw err;
       }

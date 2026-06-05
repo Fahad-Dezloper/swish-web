@@ -42,10 +42,7 @@ export function useSendTransaction(): UseSendTransactionResult {
 
   const send = useCallback(
     async (params: SendParams): Promise<SubmitResponse> => {
-      if (!solanaWallet) {
-        throw new Error("No wallet connected");
-      }
-
+      if (!solanaWallet) throw new Error("No wallet connected");
       if (!params.signature || !params.senderPublicKey) {
         throw new Error("No session signature. Please reconnect wallet.");
       }
@@ -53,7 +50,6 @@ export function useSendTransaction(): UseSendTransactionResult {
       setIsLoading(true);
       setError(null);
 
-      // Helper to cancel activity on failure
       const cancelActivity = async (activityId: string) => {
         try {
           await fetch("/api/activity/cancel", {
@@ -67,15 +63,12 @@ export function useSendTransaction(): UseSendTransactionResult {
               senderPublicKey: params.senderPublicKey,
             }),
           });
-        } catch (e) {
-          console.error("Failed to cancel activity:", e);
-        }
+        } catch {}
       };
 
       let activityId: string | null = null;
 
       try {
-        // Step 1: Call /api/send/prepare
         const prepareRes = await fetch("/api/send/prepare", {
           method: "POST",
           headers: {
@@ -100,32 +93,23 @@ export function useSendTransaction(): UseSendTransactionResult {
         const prepareResult: PrepareResponse = await prepareRes.json();
         activityId = prepareResult.activityId;
 
-        // Step 2: Decode unsigned deposit transaction from base64 to bytes
         const depositTxBytes = Uint8Array.from(
           atob(prepareResult.unsignedDepositTx),
           (c) => c.charCodeAt(0)
         );
 
-        // Step 3: Sign deposit transaction using wallet (user pays their own gas)
         let signedDepositResult;
         try {
-          signedDepositResult = await solanaWallet.signTransaction(
-            { transaction: depositTxBytes }
-          );
-        } catch (signError: any) {
-          // User rejected or signing failed - cancel the activity
-          if (activityId) {
-            await cancelActivity(activityId);
-          }
-          throw new Error(signError.message || "Transaction signing rejected");
+          signedDepositResult = await solanaWallet.signTransaction({ transaction: depositTxBytes });
+        } catch (signError) {
+          if (activityId) await cancelActivity(activityId);
+          throw new Error(signError instanceof Error ? signError.message : "Transaction signing rejected");
         }
 
-        // Convert signed transaction to base64
         const signedDepositTx = btoa(
           String.fromCharCode.apply(null, Array.from(signedDepositResult.signedTransaction))
         );
 
-        // Step 4: Call /api/send/submit
         const submitRes = await fetch("/api/send/submit", {
           method: "POST",
           headers: {
@@ -140,11 +124,6 @@ export function useSendTransaction(): UseSendTransactionResult {
             amount: params.amount,
             token: params.token || "USDC",
             lastValidBlockHeight: prepareResult.lastValidBlockHeight,
-            // Pass providerId so the submit route can validate the session
-            // sig against the right protocol's message. PC + Send & Claim
-            // flows stamp activity.provider_id at create and submit reads
-            // from the row, but MB Send/Fulfill stamp at settle (PR #20
-            // rule), so submit needs the body fallback.
             providerId: params.providerId,
           }),
         });
@@ -154,10 +133,9 @@ export function useSendTransaction(): UseSendTransactionResult {
           throw new Error(errorData.error || "Failed to submit transaction");
         }
 
-        const submitResult: SubmitResponse = await submitRes.json();
-        return submitResult;
-      } catch (err: any) {
-        const errorMessage = err.message || "Transaction failed";
+        return await submitRes.json();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Transaction failed";
         setError(errorMessage);
         throw err;
       } finally {
@@ -167,9 +145,5 @@ export function useSendTransaction(): UseSendTransactionResult {
     [solanaWallet]
   );
 
-  return {
-    send,
-    isLoading,
-    error,
-  };
+  return { send, isLoading, error };
 }

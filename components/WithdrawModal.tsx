@@ -72,9 +72,8 @@ export function WithdrawModal({
         senderPublicKey: session.address,
       });
       setState("success");
-    } catch (error: any) {
-      console.error("Withdraw failed:", error);
-      setErrorMessage(error.message || "Withdraw failed");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Withdraw failed");
       setState("error");
     }
   };

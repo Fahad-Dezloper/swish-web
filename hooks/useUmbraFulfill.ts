@@ -96,9 +96,6 @@ export function useUmbraFulfill() {
 
         const client = await getBrowserUmbraClient({ signer, rpcUrl });
 
-        // Pre-flight: requester must be FULLY registered (PDA + x25519 +
-        // commitment). Half-registered would pass `state === "exists"` but
-        // the deposit would fail mid-flight.
         reset({ stage: "checking-recipient", detail: params.receiverAddress });
         const query = getUserAccountQuerierFunction({ client });
         const recipientState = await query(params.receiverAddress as any);
@@ -144,16 +141,6 @@ export function useUmbraFulfill() {
             closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
           }),
         });
-        if (!recordRes.ok) {
-          const json = await recordRes.json().catch(() => ({}));
-          // Deposit already settled on-chain. Surface the error but don't
-          // throw — the requester got paid; only the activity row didn't
-          // update. Show a distinct warning so the user knows.
-          console.warn(
-            "Fulfill recording failed (deposit already settled):",
-            json
-          );
-        }
 
         reset({ stage: "settled", detail: null });
         return {
@@ -173,8 +160,6 @@ export function useUmbraFulfill() {
           current = current.cause;
         }
         const msg = parts.join("\n\n---\n\n");
-        // eslint-disable-next-line no-console
-        console.error("[useUmbraFulfill] error:", err);
         reset({ stage: "error", error: msg || err?.message || String(err) });
         throw err;
       }

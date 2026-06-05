@@ -117,8 +117,7 @@ export default function RequestPage({
         } else {
           setPageState("ready");
         }
-      } catch (error) {
-        console.error("Error fetching request:", error);
+      } catch {
         setPageState("error");
       }
     }
@@ -257,9 +256,8 @@ export default function RequestPage({
 
       await runMbOrPc(dispatchProvider as ProviderId);
       setPageState("success");
-    } catch (error: any) {
-      console.error("Pay request failed:", error);
-      setErrorMessage(error.message || "Something went wrong");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong");
       setPageState("error");
     }
   };
@@ -305,9 +303,8 @@ export default function RequestPage({
       }
 
       setPageState("cancelled");
-    } catch (error: any) {
-      console.error("Cancel request failed:", error);
-      setErrorMessage(error.message || "Something went wrong");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong");
       setPageState("error");
     }
   };

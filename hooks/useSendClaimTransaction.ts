@@ -53,10 +53,7 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
 
   const sendClaim = useCallback(
     async (params: SendClaimParams): Promise<SendClaimResult> => {
-      if (!solanaWallet) {
-        throw new Error("No wallet connected");
-      }
-
+      if (!solanaWallet) throw new Error("No wallet connected");
       if (!params.signature || !params.senderPublicKey) {
         throw new Error("No session signature. Please reconnect wallet.");
       }
@@ -64,7 +61,6 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
       setIsLoading(true);
       setError(null);
 
-      // Helper to cancel activity on failure
       const cancelActivity = async (activityId: string) => {
         try {
           await fetch("/api/activity/cancel", {
@@ -78,15 +74,12 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
               senderPublicKey: params.senderPublicKey,
             }),
           });
-        } catch (e) {
-          console.error("Failed to cancel activity:", e);
-        }
+        } catch {}
       };
 
       let activityId: string | null = null;
 
       try {
-        // Step 1: Call /api/send_claim/prepare
         const prepareRes = await fetch("/api/send_claim/prepare", {
           method: "POST",
           headers: {
@@ -113,38 +106,25 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
         const prepareResult: PrepareResponse = await prepareRes.json();
         activityId = prepareResult.activityId;
 
-        // Store passphrase immediately (we'll need it for the result)
         const passphrase = prepareResult.passphrase;
 
-        // Step 2: Decode unsigned deposit transaction from base64 to bytes
         const depositTxBytes = Uint8Array.from(
           atob(prepareResult.unsignedDepositTx),
           (c) => c.charCodeAt(0)
         );
 
-        // Step 3: Sign deposit transaction using wallet (user pays their own gas)
         let signedDepositResult;
         try {
-          signedDepositResult = await solanaWallet.signTransaction({
-            transaction: depositTxBytes,
-          });
-        } catch (signError: any) {
-          // User rejected or signing failed - cancel the activity
-          if (activityId) {
-            await cancelActivity(activityId);
-          }
-          throw new Error(signError.message || "Transaction signing rejected");
+          signedDepositResult = await solanaWallet.signTransaction({ transaction: depositTxBytes });
+        } catch (signError) {
+          if (activityId) await cancelActivity(activityId);
+          throw new Error(signError instanceof Error ? signError.message : "Transaction signing rejected");
         }
 
-        // Convert signed transaction to base64
         const signedDepositTx = btoa(
-          String.fromCharCode.apply(
-            null,
-            Array.from(signedDepositResult.signedTransaction)
-          )
+          String.fromCharCode.apply(null, Array.from(signedDepositResult.signedTransaction))
         );
 
-        // Step 4: Call /api/send_claim/submit
         const submitRes = await fetch("/api/send_claim/submit", {
           method: "POST",
           headers: {
@@ -173,8 +153,8 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
           depositTx: submitResult.depositTx,
           withdrawTx: submitResult.withdrawTx,
         };
-      } catch (err: any) {
-        const errorMessage = err.message || "Transaction failed";
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Transaction failed";
         setError(errorMessage);
         throw err;
       } finally {
@@ -184,9 +164,5 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
     [solanaWallet]
   );
 
-  return {
-    sendClaim,
-    isLoading,
-    error,
-  };
+  return { sendClaim, isLoading, error };
 }

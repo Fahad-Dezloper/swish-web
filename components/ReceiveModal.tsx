@@ -88,9 +88,8 @@ export function ReceiveModal({ isOpen, onClose }: ReceiveModalProps) {
       const data = await res.json();
       setRequestLink(data.requestLink);
       setState("success");
-    } catch (error: any) {
-      console.error("Request failed:", error);
-      setErrorMessage(error.message || "Something went wrong");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong");
       setState("error");
     }
   };
@@ -100,9 +99,7 @@ export function ReceiveModal({ isOpen, onClose }: ReceiveModalProps) {
       await navigator.clipboard.writeText(requestLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("Failed to copy:", error);
-    }
+    } catch {}
   };
 
   const handleClose = () => {

@@ -93,18 +93,10 @@ export function useUmbraBalance(autoFetch = false) {
 
       const client = await getBrowserUmbraClient({ signer, rpcUrl });
 
-      // Prime the master seed by running one SDK call first. Both the
-      // encrypted-balance querier AND the scanner need the master seed;
-      // running them in Promise.all races — both check the empty cache
-      // simultaneously, both prompt the user. After this first call,
-      // master seed is cached in sessionStorage and subsequent calls
-      // reuse it without prompting.
       const balanceMap = await getEncryptedBalanceQuerierFunction({
         client,
       })([USDC_MINT as any]);
 
-      // Now safe to parallelize. Scanner reuses the cached master seed;
-      // tracker fetch is unrelated to Umbra crypto.
       const [scanResult, claimedIds] = await Promise.all([
         getClaimableUtxoScannerFunction({ client })(
           BigInt(0) as any,
@@ -113,18 +105,12 @@ export function useUmbraBalance(autoFetch = false) {
         fetchClaimedUtxoIds(userAddress),
       ]);
 
-      // Encrypted balance: extract USDC amount if available + decryptable.
       let encryptedBaseUnits = BigInt(0);
       const usdcResult = balanceMap.get(USDC_MINT as any);
       if (usdcResult && (usdcResult as any).state === "shared") {
         encryptedBaseUnits = (usdcResult as any).balance as bigint;
       }
 
-      // Pending UTXOs: sum amounts from all 4 buckets that the user has
-      // a claim path for, AFTER filtering out already-claimed leaves
-      // (server-tracked). `received` / `publicReceived` are incoming
-      // sends from others; `selfBurnable` / `publicSelfBurnable` are
-      // own deposits not yet claimed.
       const pendingBuckets = filterUnclaimedUtxos(claimedIds, [
         ...((scanResult as any).received ?? []),
         ...((scanResult as any).publicReceived ?? []),
@@ -151,8 +137,6 @@ export function useUmbraBalance(autoFetch = false) {
         error: null,
       });
     } catch (err: any) {
-      // eslint-disable-next-line no-console
-      console.error("[useUmbraBalance] error:", err);
       setState({
         ...ZERO_STATE,
         status: "error",
@@ -168,9 +152,6 @@ export function useUmbraBalance(autoFetch = false) {
       setState({ ...ZERO_STATE, status: "no-wallet" });
       return;
     }
-    // Only auto-fetch silently if master seed is already cached. Otherwise
-    // wait for the user to click "Reveal" so we don't surprise them with a
-    // wallet popup on profile load.
     if (hasStoredMasterSeed(userAddress)) {
       fetchBalance();
     } else {

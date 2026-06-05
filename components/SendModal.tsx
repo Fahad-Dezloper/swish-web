@@ -265,9 +265,8 @@ export function SendModal({
         });
       }
       setState("success");
-    } catch (error: any) {
-      console.error("Send failed:", error);
-      setErrorMessage(error.message || "Transaction failed");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Transaction failed");
       setState("error");
     }
   };

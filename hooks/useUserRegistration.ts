@@ -12,7 +12,6 @@ export function useUserRegistration() {
   useEffect(() => {
     if (!ready || !authenticated || !user || registeredRef.current) return;
 
-    // For Twitter users, prefer the embedded wallet over external wallets
     const isTwitterUser = !!user.twitter;
     const userWalletAddress = user?.wallet?.address;
     const embeddedWallet = wallets.find(
@@ -22,7 +21,6 @@ export function useUserRegistration() {
     const walletAddress = wallet?.address || user?.wallet?.address;
     if (!walletAddress) return;
 
-    // Determine connection type
     const connectionType = isTwitterUser ? "x" : "wallet";
     const twitterHandle = user.twitter?.username || null;
 
@@ -37,13 +35,11 @@ export function useUserRegistration() {
         twitterHandle,
         privyUserId: user.id,
       }),
-    }).catch((err) => {
-      console.error("User registration failed:", err);
+    }).catch(() => {
       registeredRef.current = false;
     });
   }, [ready, authenticated, user, wallets]);
 
-  // Reset on logout
   useEffect(() => {
     if (ready && !authenticated) {
       registeredRef.current = false;

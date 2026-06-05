@@ -46,14 +46,9 @@ import {
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
-// Polling config for Arcium settlement after claim.
 const SETTLE_POLL_INTERVAL_MS = 2_000;
 const SETTLE_POLL_TIMEOUT_MS = 35_000;
 
-// Retry config for the tracker write. At this point the claim has
-// already settled on-chain, so a failed write would otherwise drop the
-// user into a stuck state (scanner keeps re-returning a spent UTXO).
-// A few short retries absorb transient Supabase blips.
 const MARK_RETRY_ATTEMPTS = 3;
 const MARK_RETRY_BASE_MS = 500;
 
@@ -161,7 +156,6 @@ export function useUmbraUnlock() {
       const client = await getBrowserUmbraClient({ signer, rpcUrl });
       const suite = getBrowserUmbraProverSuite();
 
-      // 1. Scan + filter claimable UTXOs via server tracker.
       const scanner = getClaimableUtxoScannerFunction({ client });
       const [scanResult, claimedIds] = await Promise.all([
         scanner(BigInt(0) as any, BigInt(0) as any),
@@ -177,10 +171,9 @@ export function useUmbraUnlock() {
       ]);
       const hasPending = receiverUtxos.length > 0 || selfUtxos.length > 0;
 
-      // Pre-claim encrypted balance (so we know what to wait for).
       let preBalance = await readEncryptedBalance(client);
 
-      // 2. Claim if needed.
+
       if (hasPending) {
         setState({ stage: "claiming", signature: null, error: null });
         const relayer = await getBrowserUmbraRelayer();
@@ -218,19 +211,12 @@ export function useUmbraUnlock() {
           await claimSelf(selfUtxos as any);
         }
 
-        // 3. Wait for Arcium MPC to credit the encrypted balance.
         setState({ stage: "settling", signature: null, error: null });
-        // We expect at least pre + (pendingTotal − some-fee). Polling
-        // until balance > preBalance is the safe lower bound.
         const finalBalance = await pollUntilCredited(
           client,
           preBalance + BigInt(1)
         );
 
-        // Hard-gate: only mark UTXOs claimed once Arcium has actually
-        // credited the balance. If the callback never fired the UTXO is
-        // still claimable on-chain — surface a retryable error rather than
-        // marking it claimed and silently stranding the balance.
         if (finalBalance <= preBalance) {
           throw new Error(
             "Claim timed out — encrypted balance was not credited. " +
@@ -246,7 +232,6 @@ export function useUmbraUnlock() {
         }
       }
 
-      // 4. Read final available balance + withdraw.
       setState({ stage: "withdrawing", signature: null, error: null });
       const availableBaseUnits = await readEncryptedBalance(client);
       if (availableBaseUnits === BigInt(0)) {
@@ -262,7 +247,6 @@ export function useUmbraUnlock() {
       if (amountBaseUnits <= BigInt(0)) {
         throw new Error("Amount must be greater than 0");
       }
-      // Clamp to whatever actually settled (Arcium fees may shave a bit).
       const finalAmount =
         amountBaseUnits > availableBaseUnits
           ? availableBaseUnits
@@ -289,8 +273,6 @@ export function useUmbraUnlock() {
         }
         cur = cur.cause;
       }
-      // eslint-disable-next-line no-console
-      console.error("[useUmbraUnlock] error:", err);
       setState({
         stage: "error",
         signature: null,
