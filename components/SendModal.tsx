@@ -18,6 +18,7 @@ import { useUmbraSend } from "@/hooks/useUmbraSend";
 import { useUmbraStatus } from "@/hooks/useUmbraStatus";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
 import { useAutoRoute } from "@/hooks/useAutoRoute";
+import { useSOLBalance } from "@/hooks/useSOLBalance";
 import {
   useSessionSignature,
   type GetSessionSignature,
@@ -33,6 +34,11 @@ const SEND_PROVIDER_POOL: ProviderId[] = [
   "magicblock-per",
   "privacy-cash",
 ];
+
+// Threshold below which we consider the wallet empty (< 1 base tx fee).
+// Only block/warn when the user literally has no SOL; for any non-trivial
+// balance the backend's assertSolSufficient check returns a friendly error.
+const SOL_DUST_THRESHOLD = 5_000;
 
 interface SendModalProps {
   isOpen: boolean;
@@ -135,6 +141,12 @@ export function SendModal({
     "send"
   );
   const total = numAmount - partnerFee;
+
+  const { balance: solBalance } = useSOLBalance(senderAddress);
+  const solBalanceLamports = Math.round((solBalance ?? 0) * 1e9);
+  // Only block when the wallet is effectively empty (< 1 base tx fee).
+  const insufficientSol =
+    solBalance !== null && effectiveProvider !== "auto" && solBalanceLamports < SOL_DUST_THRESHOLD;
 
   const canProceed =
     recipientType === "wallet" ? isValidAddress : isValidXHandle;
@@ -512,12 +524,19 @@ export function SendModal({
                 </div>
               </div>
 
+              {insufficientSol && (
+                <p className="text-[#CB0000] text-sm mb-3">
+                  Your wallet has no SOL. Add a small amount of SOL to cover transaction fees.
+                </p>
+              )}
+
               <motion.button
                 onClick={handleProceed}
                 disabled={
                   !canProceed ||
                   isResolvingX ||
                   umbraBlockedByRecipient ||
+                  insufficientSol ||
                   (provider === "auto" &&
                     (noAutoTarget || autoUnavailable || !autoResolved))
                 }

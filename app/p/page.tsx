@@ -22,6 +22,7 @@ import { useSOLBalance } from "@/hooks/useSOLBalance";
 import { useUmbraStatus } from "@/hooks/useUmbraStatus";
 import { useUmbraRegister } from "@/hooks/useUmbraRegister";
 import { useUmbraBalance } from "@/hooks/useUmbraBalance";
+import { isProviderDisabled } from "@/lib/providers/maintenance";
 
 type TabType = "wallet" | "activity";
 
@@ -300,6 +301,7 @@ export default function ProfilePage() {
                     <motion.button
                       onClick={handleRegisterUmbra}
                       disabled={
+                        isProviderDisabled("umbra") ||
                         isRegisteringUmbra ||
                         umbraStatus === "loading" ||
                         umbraStatus === "no-wallet"

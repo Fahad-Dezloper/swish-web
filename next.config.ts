@@ -70,6 +70,11 @@ const csp = [
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["privacycash", "@lightprotocol/hasher.rs"],
+  // Limit Turbopack's persistent cache to prevent filling the disk.
+  // The default is unlimited; these heavy WASM/ZK packages make .next grow to 2.5GB+.
+  experimental: {
+    turbopackFileSystemCacheForDev: false,
+  },
   async headers() {
     return [
       {
