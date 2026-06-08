@@ -35,9 +35,6 @@ const SEND_PROVIDER_POOL: ProviderId[] = [
   "privacy-cash",
 ];
 
-// Threshold below which we consider the wallet empty (< 1 base tx fee).
-// Only block/warn when the user literally has no SOL; for any non-trivial
-// balance the backend's assertSolSufficient check returns a friendly error.
 const SOL_DUST_THRESHOLD = 5_000;
 
 interface SendModalProps {
@@ -144,7 +141,6 @@ export function SendModal({
 
   const { balance: solBalance } = useSOLBalance(senderAddress);
   const solBalanceLamports = Math.round((solBalance ?? 0) * 1e9);
-  // Only block when the wallet is effectively empty (< 1 base tx fee).
   const insufficientSol =
     solBalance !== null && effectiveProvider !== "auto" && solBalanceLamports < SOL_DUST_THRESHOLD;
 

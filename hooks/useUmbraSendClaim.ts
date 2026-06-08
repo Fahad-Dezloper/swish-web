@@ -1,26 +1,5 @@
 "use client";
 
-/**
- * Client-side Umbra Send & Claim hook (flipped burner pattern).
- *
- * Flow:
- *   1. Call /api/umbra/sc/prepare → server provisions a fresh burner,
- *      registers it on Umbra (sponsored), persists activity row in
- *      `processing` state. Returns burner address + passphrase.
- *   2. Run Umbra Direct Send to the burner's address using the user's
- *      embedded wallet as IUmbraSigner (3 wallet prompts: 1 consent
- *      signMessage + 2 deposit signTransactions). Same SDK call as
- *      `useUmbraSend`, just targeting the per-SC burner.
- *   3. Call /api/umbra/sc/record → server marks activity `open`,
- *      returns the claim link.
- *
- * Sender on-chain trace becomes `sender → Umbra pool` (no visible
- * intermediate burner ATA), which is the privacy upgrade vs the old
- * "sender SPL → burner → server-side Umbra deposit" pattern.
- *
- * Mirrors `useUmbraSend.ts`. Keep them in sync if either changes.
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 

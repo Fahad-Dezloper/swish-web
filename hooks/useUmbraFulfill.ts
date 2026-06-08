@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * Client-side Umbra Request fulfill hook.
- *
- * Same SDK flow as useUmbraSend (1 consent + 2 deposit txs = 3 prompts),
- * but instead of creating a new activity row, marks an existing
- * `type='request'` row as settled with provider_id='umbra'.
- *
- * Uses /api/umbra/fulfill/record (atomic via claimActivity) so two
- * payers racing the same request can't both succeed.
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 

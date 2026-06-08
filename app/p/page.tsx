@@ -101,7 +101,6 @@ export default function ProfilePage() {
     try {
       await registerUmbra();
     } catch {
-      // hook surfaces error in state
     } finally {
       refetchUmbraStatus();
     }
@@ -148,7 +147,6 @@ export default function ProfilePage() {
   return (
     <>
       <main className="flex flex-col items-center gap-6 p-4 w-full h-[stretch]">
-        {/* Header: Address + X handle */}
         <div className="w-full max-w-[320px]">
           <div className="flex items-center justify-between gap-2 w-full">
             <span className="text-[#121212] font-medium text-lg">
@@ -200,7 +198,6 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Tab Toggle */}
         <div className="w-full max-w-[320px] flex bg-[#121212]/5 rounded-full p-1">
           <button
             onClick={() => selectTab("wallet")}
@@ -233,7 +230,6 @@ export default function ProfilePage() {
               exit={{ opacity: 0 }}
               className="flex flex-col gap-6 w-full max-w-[320px]"
             >
-              {/* Total Balance */}
               <div className="text-center">
                 <p className="text-[#121212]/50 text-sm mb-1">Total Balance</p>
                 <p className="text-4xl font-semibold">
@@ -248,7 +244,6 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              {/* Token Rows */}
               <div className="space-y-3">
                 <AssetRow
                   icon="/assets/usdc-icon.svg"
@@ -274,7 +269,6 @@ export default function ProfilePage() {
                 />
               </div>
 
-              {/* Umbra section */}
               <div className="border-t border-[#121212]/10 pt-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -325,7 +319,6 @@ export default function ProfilePage() {
                   </p>
                 )}
 
-                {/* Shielded balance + Reveal/Unlock (registered only) */}
                 {isUmbraRegistered && (
                   <div className="mt-3">
                     <div className="flex items-center justify-between gap-3">
@@ -389,7 +382,6 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {/* Stats */}
               <div className="space-y-2 border-t border-[#121212]/10 pt-4">
                 <div className="flex justify-between">
                   <span className="text-[#121212] text-sm font-medium">
@@ -437,7 +429,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-3">
                 <motion.button
                   onClick={() => setShowAddFunds(true)}

@@ -1,25 +1,5 @@
 "use client";
 
-/**
- * Client-side Umbra registration hook.
- *
- * Registers the user's wallet on Umbra so they can send/receive private
- * USDC. One-time setup: ~4-5 wallet prompts for a fresh wallet (1 consent
- * signMessage + 4 registration txs: InitialiseEncryptedUserAccount,
- * RegisterTokenPublicKey, RegisterUserForAnonymousUsageV11, and the
- * auto-fired ClaimComputationRent rent reclaim). Idempotent — calling on
- * an already-registered wallet returns 0 sigs (no-op); calling on a
- * half-done wallet skips completed steps.
- *
- * For tonight's testing the user pays SOL for registration tx fees and
- * PDA rent (~$9 in rent locked into Umbra's PDAs, permanently). For
- * production we'd want sponsor to be the fee payer + rent payer; that's
- * a follow-up.
- *
- * Required for direct Send / Request fulfill — Umbra's on-chain program
- * verifies the depositor's `EncryptedUserAccount` PDA exists.
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 

@@ -44,15 +44,12 @@ export function formatNumber(num: number): string {
   for (const { value, suffix } of suffixes) {
     if (num >= value) {
       const scaled = num / value;
-      // Truncate to 2 decimal places (never overstate the amount)
       const rounded = Math.floor(scaled * 100) / 100;
-      // Format with up to 2 decimals, remove trailing zeros
       const formatted = rounded.toFixed(2).replace(/\.?0+$/, "");
       return `${formatted}${suffix}`;
     }
   }
 
-  // For numbers less than 1000
   if (Number.isInteger(num)) {
     return num.toString();
   }
@@ -78,9 +75,6 @@ export function formatNumber(num: number): string {
   return `${intPart}.${decPart.slice(0, 3)}`.replace(/\.?0+$/, "");
 }
 
-/**
- * Formats a currency amount (USDC) with proper formatting
- */
 export function formatUSDC(amount: number): string {
   return `${formatNumber(amount)} USDC`;
 }

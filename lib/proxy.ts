@@ -6,23 +6,12 @@ if (!CORE_URL) {
   throw new Error("SWISH_CORE_URL is not set");
 }
 
-/**
- * Forward a Next.js App Router request to swish-core and return the response.
- *
- * Passes through:
- *   - Request body (as JSON)
- *   - X-Session-Signature header
- *   - Content-Type header
- *
- * Status codes are preserved exactly — the frontend never knows it's a proxy.
- */
 export async function proxyToCore(
   req: NextRequest,
   path: string
 ): Promise<NextResponse> {
   const url = new URL(path, CORE_URL);
 
-  // Forward query params (GET requests like /activity/user?address=...)
   req.nextUrl.searchParams.forEach((value, key) => {
     url.searchParams.set(key, value);
   });

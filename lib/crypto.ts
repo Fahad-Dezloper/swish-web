@@ -9,7 +9,6 @@ export interface EncryptedPayload {
   ephemeralPublicKey: string;
 }
 
-// Passphrase-encrypted payload (for claim links)
 export interface PassphraseEncryptedPayload {
   ciphertext: string;
   nonce: string;
@@ -87,13 +86,6 @@ const NOUNS = [
   "tiger", "timber", "titan", "torch", "trail", "tree", "trident", "valley",
 ];
 
-/**
- * Generate a secure passphrase like "amber-tiger-cosmic-falcon-847"
- *
- * Entropy: 256 × 256 × 256 × 256 × 1000 = 4.3 trillion combinations (~42 bits)
- * Format: adjective-noun-adjective-noun-number
- * Uses cryptographically secure randomness (crypto.randomInt)
- */
 export function generatePassphrase(): string {
   const adj1 = ADJECTIVES[randomInt(ADJECTIVES.length)];
   const noun1 = NOUNS[randomInt(NOUNS.length)];
@@ -103,24 +95,17 @@ export function generatePassphrase(): string {
   return `${adj1}-${noun1}-${adj2}-${noun2}-${num}`;
 }
 
-/**
- * Derive encryption key from passphrase + salt using PBKDF2
- * Uses 100,000 iterations for brute-force resistance
- */
 function deriveKey(passphrase: string, salt: Uint8Array): Uint8Array {
   const key = pbkdf2Sync(
     passphrase,
     salt,
-    100000, // iterations - high enough for security, fast enough for UX
-    32, // key length (256 bits for nacl.secretbox)
+    100000,
+    32,
     "sha256"
   );
   return new Uint8Array(key);
 }
 
-/**
- * Encrypt data with passphrase (for claim links)
- */
 export function encryptWithPassphrase(
   data: Uint8Array,
   passphrase: string
@@ -138,9 +123,6 @@ export function encryptWithPassphrase(
   };
 }
 
-/**
- * Decrypt data with passphrase (for claim links)
- */
 export function decryptWithPassphrase(
   payload: PassphraseEncryptedPayload,
   passphrase: string
@@ -170,7 +152,6 @@ export function encryptForRecipient(
   const ephemeralKeypair = nacl.box.keyPair();
   const nonce = nacl.randomBytes(nacl.box.nonceLength);
 
-  // Encrypt the data
   const encrypted = nacl.box(
     data,
     nonce,
@@ -213,19 +194,12 @@ export function deserializeKeypair(encoded: string): Uint8Array {
   return bs58.decode(encoded);
 }
 
-/**
- * Derive encryption key from session signature using SHA-256
- * Used for sender reclaim capability on claim links
- */
 function deriveKeyFromSignature(sessionSignature: Uint8Array): Uint8Array {
   const hash = createHash("sha256");
   hash.update(sessionSignature);
   return new Uint8Array(hash.digest());
 }
 
-/**
- * Encrypt data with session signature (for sender reclaim on claim links)
- */
 export function encryptWithSessionSignature(
   data: Uint8Array,
   sessionSignature: Uint8Array
@@ -242,9 +216,6 @@ export function encryptWithSessionSignature(
   };
 }
 
-/**
- * Decrypt data with session signature (for sender reclaim on claim links)
- */
 export function decryptWithSessionSignature(
   payload: PassphraseEncryptedPayload,
   sessionSignature: Uint8Array

@@ -1,26 +1,5 @@
 "use client";
 
-/**
- * Unlock = move user's Umbra-held USDC to their mainnet ATA.
- *
- * Flow:
- *   1. Scan claimable UTXOs and filter via the local tracker (drops
- *      already-claimed leaves the SDK scanner still returns).
- *   2. If unclaimed UTXOs exist, claim them via Umbra's relayer
- *      (gasless).
- *   3. Poll the encrypted balance until Arcium MPC has credited the
- *      claimed amount (~10–15s typical, capped at ~30s). Only once the
- *      credit is confirmed do we mark the UTXOs in the tracker — until
- *      Arcium's callback fires the UTXO stays claimable on-chain, so
- *      marking earlier would strand the balance if the callback hangs.
- *   4. Withdraw the requested amount from encrypted balance to the
- *      user's mainnet ATA via
- *      `getEncryptedBalanceToPublicBalanceDirectWithdrawerFunction`.
- *
- * Polling avoids the "claim succeeds but encrypted balance not yet
- * credited" race that caused withdraw-with-amount > available errors.
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 

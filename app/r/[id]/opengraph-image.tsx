@@ -16,7 +16,6 @@ export default async function Image({
 }) {
   const { id } = await params;
 
-  // Fetch Jost font
   const fontData = await fetch(
     "https://fonts.googleapis.com/css2?family=Jost:wght@300;400&display=swap",
     { headers: { "User-Agent": "Mozilla/5.0" } }

@@ -1,20 +1,5 @@
 "use client";
 
-/**
- * Read the user's Umbra "shielded" balance — sum of:
- *   1. Decrypted encrypted-balance amount (already-claimed funds)
- *   2. Filtered pending UTXOs (receiver-claimable + self-claimable that
- *      haven't been claimed yet, per our localStorage tracker)
- *
- * The localStorage tracker filters out already-claimed leaves that the
- * SDK scanner still returns (Umbra doesn't filter nullified UTXOs at
- * the scanner level — they're shipping a plugin for this in an upcoming
- * release; until then, dapps track their own).
- *
- * UI exposes a single `totalUSDC` for display. The `Unlock` flow uses
- * this hook's filtered result to drive claim+withdraw sequencing.
- */
-
 import { useCallback, useEffect, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 

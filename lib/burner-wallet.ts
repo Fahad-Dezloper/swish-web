@@ -29,13 +29,11 @@ export async function createBurnerWallet(
   const burnerKeypair = Keypair.generate();
   const privateKeyBytes = burnerKeypair.secretKey;
 
-  // Encrypt for recipient
   const encryptedForRecipient = encryptForRecipient(
     privateKeyBytes,
     recipientPublicKey
   );
 
-  // Encrypt for sender
   const encryptedForSender = encryptForRecipient(
     privateKeyBytes,
     senderPublicKey

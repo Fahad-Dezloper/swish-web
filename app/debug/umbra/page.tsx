@@ -1,18 +1,5 @@
 "use client";
 
-/**
- * Browser smoke test for Umbra SDK + useUmbraSend hook.
- *
- * Two test surfaces:
- *   1. SDK smoke test — verifies the Umbra SDK + WASM prover load and
- *      run a read query in the browser. No funds at stake.
- *   2. Umbra send test — actually triggers a direct Send via the new
- *      useUmbraSend hook. Default recipient is the test wallet that's
- *      already registered on Umbra. STAKES SMALL USDC.
- *
- * Throwaway — delete after Phase 2 lands.
- */
-
 import { useState } from "react";
 import { Keypair } from "@solana/web3.js";
 import { useWallets, useStandardWallets } from "@privy-io/react-auth/solana";
@@ -59,7 +46,6 @@ export default function UmbraSmokeTestPage() {
 
     const tStart = Date.now();
     try {
-      // Stage 0: Import SDK (this is also the bundle test)
       updateStage(0, { status: "running" });
       const t0 = Date.now();
       const sdk = await import("@umbra-privacy/sdk");
@@ -70,7 +56,6 @@ export default function UmbraSmokeTestPage() {
         detail: `Loaded ${Object.keys(sdk).length} sdk exports + ${Object.keys(prover).length} prover exports`,
       });
 
-      // Stage 1: Construct prover suite (this exercises WASM loading)
       updateStage(1, { status: "running" });
       const t1 = Date.now();
       const assetProvider = prover.getCdnZkAssetProvider();
@@ -94,7 +79,6 @@ export default function UmbraSmokeTestPage() {
         detail: `${Object.keys(suite).length} provers constructed`,
       });
 
-      // Stage 2: Construct Umbra client (browser-side)
       updateStage(2, { status: "running" });
       const t2 = Date.now();
       const throwaway = Keypair.generate();
@@ -118,7 +102,6 @@ export default function UmbraSmokeTestPage() {
         detail: `Client constructed; signer address: ${signer.address.slice(0, 8)}...`,
       });
 
-      // Stage 3: Query a known-registered address
       updateStage(3, { status: "running" });
       const t3 = Date.now();
       const query = sdk.getUserAccountQuerierFunction({ client });
@@ -129,7 +112,6 @@ export default function UmbraSmokeTestPage() {
         detail: `state: ${knownResult.state}`,
       });
 
-      // Stage 4: Query a fresh unregistered address (the throwaway we generated)
       updateStage(4, { status: "running" });
       const t4 = Date.now();
       const unknownResult = await query(throwaway.publicKey.toBase58() as any);
@@ -153,17 +135,14 @@ export default function UmbraSmokeTestPage() {
     }
   };
 
-  // === Umbra registration status (live) ===
   const {
     status: umbraStatus,
     address: walletAddress,
     refetch: refetchStatus,
   } = useUmbraStatus();
 
-  // === Umbra registration ===
   const { register, state: registerState } = useUmbraRegister();
 
-  // === Real Umbra send test ===
   const [recipient, setRecipient] = useState(TEST_REGISTERED_ADDRESS);
   const [amount, setAmount] = useState("0.05");
   const { send, state: sendState } = useUmbraSend();
@@ -187,7 +166,6 @@ export default function UmbraSmokeTestPage() {
         createProofAccountSignature: result.createProofAccountSignature,
       });
     } catch (err) {
-      // useUmbraSend already updates state on error; nothing to do here
     }
   };
 
@@ -260,7 +238,6 @@ export default function UmbraSmokeTestPage() {
             for tx fees + PDA rent (~0.005-0.01 SOL).
           </p>
 
-          {/* Live registration status pill */}
           <div className="mb-4 flex items-center gap-2 text-sm">
             <span className="text-[#121212]/50">Wallet:</span>
             <span className="font-mono text-xs text-[#121212]">
@@ -302,7 +279,6 @@ export default function UmbraSmokeTestPage() {
               try {
                 await register();
               } catch {
-                // hook surfaces error
               } finally {
                 refetchStatus();
               }

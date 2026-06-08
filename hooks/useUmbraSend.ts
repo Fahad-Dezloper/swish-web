@@ -1,17 +1,5 @@
 "use client";
 
-/**
- * Client-side Umbra direct Send hook.
- *
- * Runs the Umbra SDK in the browser using the user's Privy embedded
- * wallet (or any wallet-standard wallet) as the IUmbraSigner. The user
- * signs each tx the SDK builds — typically 1 master-seed-consent
- * signMessage + 2 deposit signTransactions = 3 wallet prompts.
- *
- * For why we run client-side instead of server-side burner pattern,
- * see [Umbra pivot](memory/project_umbra_pivot_to_client_side.md).
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 

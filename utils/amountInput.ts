@@ -21,15 +21,12 @@ export function appendAmountKey(
   maxDecimals: number
 ): string {
   if (key === ".") {
-    // Only one decimal point; no extra "." once the limit is 0.
     if (maxDecimals <= 0 || current.includes(".")) return current;
     return current + ".";
   }
 
-  // First significant digit replaces a lone leading "0".
   if (current === "0") return key;
 
-  // Block typing past the asset's decimal precision.
   const dotIndex = current.indexOf(".");
   if (dotIndex !== -1) {
     const decimalsTyped = current.length - dotIndex - 1;
