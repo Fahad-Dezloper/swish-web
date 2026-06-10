@@ -26,7 +26,7 @@ import {
   SolanaSignMessage,
   SolanaSignTransaction,
 } from "@solana/wallet-standard-features";
-import type { IUmbraSigner } from "@umbra-privacy/sdk/interfaces";
+import type { IUmbraSigner } from "@umbra-privacy/sdk";
 
 export function createUmbraSignerFromPrivyWallet(
   wallet: any, // wallet-standard Wallet (Privy's PrivyStandardWallet implements this)

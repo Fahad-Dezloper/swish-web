@@ -27,22 +27,19 @@ import {
   createTransferInstruction,
   getAssociatedTokenAddress,
 } from "@solana/spl-token";
+import { getUserRegistrationFunction } from "@umbra-privacy/sdk/registration";
 import {
-  getUserRegistrationFunction,
-  getPublicBalanceToReceiverClaimableUtxoCreatorFunction,
-  getPublicBalanceToSelfClaimableUtxoCreatorFunction,
-  getUserAccountQuerierFunction,
-} from "@umbra-privacy/sdk";
-import type {
-  ZkProverForReceiverClaimableUtxoFromPublicBalance,
-  ZkProverForSelfClaimableUtxoFromPublicBalance,
-} from "@umbra-privacy/sdk/interfaces";
+  getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction,
+  getATAIntoSelfBurnableStealthPoolNoteCreatorFunction,
+} from "@umbra-privacy/sdk/deposit";
+import { getUserAccountQuerierFunction } from "@umbra-privacy/sdk/query";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { loadSponsorWallet } from "./sponsorWallet";
 import {
   createUmbraSignerFromKeypair,
   getServerUmbraClient,
+  getUmbraAtaDepositProver,
   getUmbraProverSuite,
 } from "./umbraSDK";
 
@@ -271,16 +268,12 @@ export async function depositToReceiverClaimable(
 }> {
   const signer = await createUmbraSignerFromKeypair(burnerKeypair);
   const client = await getServerUmbraClient({ signer });
-  const suite = getUmbraProverSuite();
 
-  // Variance cast — see umbraSDK.ts. The deposit factory wants the narrower
-  // FromPublicBalance prover; suite slot is wider.
-  const deposit = getPublicBalanceToReceiverClaimableUtxoCreatorFunction(
+  // v5: ATA (public-balance) → receiver-burnable stealth-pool note. The
+  // deposit factory takes the ATA deposit prover (not part of the suite).
+  const deposit = getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction(
     { client },
-    {
-      zkProver:
-        suite.utxoReceiverClaimable as unknown as ZkProverForReceiverClaimableUtxoFromPublicBalance,
-    }
+    { zkProver: getUmbraAtaDepositProver() }
   );
 
   const result = await deposit({
@@ -289,9 +282,12 @@ export async function depositToReceiverClaimable(
     mint: mint as any,
   });
 
+  // v5 renamed the proof-account tx (`createProofAccountSignature` →
+  // `populateProofAccountSignature`) and dropped the separate close tx. We
+  // keep the app-level field names for the activity-record API contract.
   return {
-    closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
-    createProofAccountSignature: result.createProofAccountSignature.toString(),
+    createProofAccountSignature:
+      result.populateProofAccountSignature.toString(),
     createUtxoSignature: result.createUtxoSignature.toString(),
   };
 }
@@ -314,14 +310,11 @@ export async function depositToSelfClaimable(
 }> {
   const signer = await createUmbraSignerFromKeypair(burnerKeypair);
   const client = await getServerUmbraClient({ signer });
-  const suite = getUmbraProverSuite();
 
-  const deposit = getPublicBalanceToSelfClaimableUtxoCreatorFunction(
+  // v5: ATA (public-balance) → self-burnable stealth-pool note.
+  const deposit = getATAIntoSelfBurnableStealthPoolNoteCreatorFunction(
     { client },
-    {
-      zkProver:
-        suite.utxoSelfClaimable as unknown as ZkProverForSelfClaimableUtxoFromPublicBalance,
-    }
+    { zkProver: getUmbraAtaDepositProver() }
   );
 
   const result = await deposit({
@@ -331,8 +324,8 @@ export async function depositToSelfClaimable(
   });
 
   return {
-    closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
-    createProofAccountSignature: result.createProofAccountSignature.toString(),
+    createProofAccountSignature:
+      result.populateProofAccountSignature.toString(),
     createUtxoSignature: result.createUtxoSignature.toString(),
   };
 }

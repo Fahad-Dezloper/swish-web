@@ -36,15 +36,13 @@ import {
 } from "@solana/web3.js";
 import bs58 from "bs58";
 
-import {
-  getUserRegistrationFunction,
-  getPublicBalanceToSelfClaimableUtxoCreatorFunction,
-} from "@umbra-privacy/sdk";
-import type { ZkProverForSelfClaimableUtxoFromPublicBalance } from "@umbra-privacy/sdk/interfaces";
+import { getUserRegistrationFunction } from "@umbra-privacy/sdk/registration";
+import { getATAIntoSelfBurnableStealthPoolNoteCreatorFunction } from "@umbra-privacy/sdk/deposit";
 
 import {
   createUmbraSignerFromKeypair,
   getServerUmbraClient,
+  getUmbraAtaDepositProver,
   getUmbraProverSuite,
 } from "../lib/sponsor/umbraSDK";
 import { loadSponsorWallet } from "../lib/sponsor/sponsorWallet";
@@ -138,17 +136,11 @@ async function main() {
     console.log(`    ${sig.toString()}`);
   }
 
-  console.log("\n[3/3] Depositing USDC to self-claimable UTXO...");
-  const suite = suiteForReg;
-  // Variance cast: suite.utxoSelfClaimable is the wider IZkProverForSelfClaimableUtxo
-  // (handles both FromPublic and FromEncrypted inputs). The deposit factory wants the
-  // narrower FromPublicBalance variant. Cast back down — safe because we built the
-  // suite from the FromPublicBalance prover originally (see umbraSDK.ts).
-  const deposit = getPublicBalanceToSelfClaimableUtxoCreatorFunction(
+  console.log("\n[3/3] Depositing USDC to self-burnable stealth-pool note...");
+  // v5: ATA (public-balance) → self-burnable note; takes the ATA deposit prover.
+  const deposit = getATAIntoSelfBurnableStealthPoolNoteCreatorFunction(
     { client },
-    {
-      zkProver: suite.utxoSelfClaimable as unknown as ZkProverForSelfClaimableUtxoFromPublicBalance,
-    }
+    { zkProver: getUmbraAtaDepositProver() }
   );
 
   const startDep = Date.now();
@@ -161,10 +153,7 @@ async function main() {
 
   console.log(`  ✓ Deposit completed in ${depMs}ms`);
   console.log(
-    `  closeProofAccountSignature: ${result.closeProofAccountSignature?.toString() ?? "(skipped)"}`
-  );
-  console.log(
-    `  createProofAccountSignature: ${result.createProofAccountSignature.toString()}`
+    `  populateProofAccountSignature: ${result.populateProofAccountSignature.toString()}`
   );
   console.log(
     `  createUtxoSignature: ${result.createUtxoSignature.toString()}`
@@ -173,9 +162,6 @@ async function main() {
   console.log("\n✅ Probe completed successfully.");
   console.log("\nFindings to record:");
   console.log(`  - Registration tx count: ${registrationSigs.length}`);
-  console.log(
-    `  - Deposit tx count: ${result.closeProofAccountSignature ? 3 : 2}`
-  );
   console.log(`  - Registration latency: ${regMs}ms`);
   console.log(`  - Deposit latency: ${depMs}ms`);
 }

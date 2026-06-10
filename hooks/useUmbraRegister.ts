@@ -23,10 +23,8 @@
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
-import {
-  getUserAccountQuerierFunction,
-  getUserRegistrationFunction,
-} from "@umbra-privacy/sdk";
+import { getUserAccountQuerierFunction } from "@umbra-privacy/sdk/query";
+import { getUserRegistrationFunction } from "@umbra-privacy/sdk/registration";
 
 import {
   getBrowserUmbraClient,

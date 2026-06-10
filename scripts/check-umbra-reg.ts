@@ -10,7 +10,9 @@ async function main() {
   const { createUmbraSignerFromKeypair, getServerUmbraClient } = await import(
     "@/lib/sponsor/umbraSDK"
   );
-  const { getUserAccountQuerierFunction } = await import("@umbra-privacy/sdk");
+  const { getUserAccountQuerierFunction } = await import(
+    "@umbra-privacy/sdk/query"
+  );
 
   const throwaway = Keypair.generate();
   const signer = await createUmbraSignerFromKeypair(throwaway);

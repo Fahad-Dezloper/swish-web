@@ -11,8 +11,12 @@
  *                                       == the entered amount and the fee
  *                                       comes out of what the recipient gets,
  *                                       like PC / Umbra.)
- *   Umbra  0.7% on claim, all flows    (claim is unavoidable — SDK has no
- *                                       receiver-side path that skips it)
+ *   Umbra  ~0.35% send + ~0.35% unshield (two legs; measured on-chain
+ *                                       2026-06-11. SDK = 35bps protocol +
+ *                                       35bps relayer, fired on DIFFERENT legs.
+ *                                       Direct send/fulfill: 0.35% at send +
+ *                                       0.35% at unshield. SC: full 0.7% at
+ *                                       claim, no separate unshield.)
  */
 
 import type { ProviderId } from "./providers/types";
@@ -47,27 +51,24 @@ export function estimateMbFee(amount: number): FeeEstimate {
   };
 }
 
-// Umbra: 0.7% on claim, regardless of flow. Verified from SDK fee providers:
-//   getHardcodedDepositProtocolFeeProvider:    0 BPS
-//   getHardcodedCreateUtxoProtocolFeeProvider: 0 BPS
-//   getHardcodedWithdrawalProtocolFeeProvider: 0 BPS
-//   getHardcodedClaimUtxoProtocolFeeProvider:  35 BPS
-//   getHardcodedClaimUtxoRelayerFeeProvider:   35 BPS
+// Umbra charges ~0.35% on the send/deposit leg AND ~0.35% on the unshield/claim
+// leg — two separate on-chain fees, not one. Measured on-chain 2026-06-11: $1
+// direct send → 0.996521 note (send leg), then unshield → 0.993055 landed
+// (unshield leg); ~0.695% round-trip.
 //
-// Why all three flows pay it:
-//   - Direct Send / Request fulfill: recipient lands an encrypted UTXO; the
-//     ONLY SDK path to access it is `getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction`
-//     which fires the 0.7% claim. Withdraw to public ATA after that is 0 BPS.
-//   - Send & Claim: claim fires inside our burner flow when the link is opened.
-//
-// We surface the fee at send time (subtracted from "they receive") because
-// the recipient effectively receives `amount - 0.7%` of usable USDC.
-export function estimateUmbraFee(amount: number, _flow: FlowKind): FeeEstimate {
-  const fee = amount * 0.007;
-  return {
-    feeUSDC: fee,
-    breakdown: "0.7% on claim",
-  };
+// Per flow:
+//   - Direct Send / Request fulfill: recipient lands a shielded note → we
+//     surface only the SEND leg here; the recipient pays the unshield leg later
+//     (UnlockModal, which reuses UMBRA_FEE_RATE).
+//   - Send & Claim: the burner claims + unshields straight to the recipient
+//     (no separate unshield step), so both legs land at claim → full ~0.7%.
+export const UMBRA_FEE_RATE = 0.0035; // per leg
+
+export function estimateUmbraFee(amount: number, flow: FlowKind): FeeEstimate {
+  if (flow === "send_claim") {
+    return { feeUSDC: amount * UMBRA_FEE_RATE * 2, breakdown: "0.7%" };
+  }
+  return { feeUSDC: amount * UMBRA_FEE_RATE, breakdown: "0.35%" };
 }
 
 /**

@@ -15,15 +15,12 @@
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
-import {
-  getPublicBalanceToReceiverClaimableUtxoCreatorFunction,
-  getUserAccountQuerierFunction,
-} from "@umbra-privacy/sdk";
-import type { ZkProverForReceiverClaimableUtxoFromPublicBalance } from "@umbra-privacy/sdk/interfaces";
+import { getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction } from "@umbra-privacy/sdk/deposit";
+import { getUserAccountQuerierFunction } from "@umbra-privacy/sdk/query";
 
 import {
   getBrowserUmbraClient,
-  getBrowserUmbraProverSuite,
+  getBrowserUmbraAtaDepositProver,
 } from "@/lib/client/umbraClientSDK";
 import { createUmbraSignerFromPrivyWallet } from "@/lib/client/umbraPrivySigner";
 
@@ -133,13 +130,9 @@ export function useUmbraSend() {
           detail: "Sign each prompt to complete the private send (~3 prompts)",
         });
 
-        const suite = getBrowserUmbraProverSuite();
-        const deposit = getPublicBalanceToReceiverClaimableUtxoCreatorFunction(
+        const deposit = getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction(
           { client },
-          {
-            zkProver:
-              suite.utxoReceiverClaimable as unknown as ZkProverForReceiverClaimableUtxoFromPublicBalance,
-          }
+          { zkProver: getBrowserUmbraAtaDepositProver() }
         );
 
         const result = await deposit({
@@ -162,8 +155,10 @@ export function useUmbraSend() {
               amountBaseUnits: params.amountBaseUnits.toString(),
               message: params.message,
               createUtxoSignature: result.createUtxoSignature.toString(),
-              createProofAccountSignature: result.createProofAccountSignature.toString(),
-              closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
+              // v5: `populateProofAccountSignature` replaces v4's create/close
+              // proof-account tx pair (no separate close tx).
+              createProofAccountSignature:
+                result.populateProofAccountSignature.toString(),
             }),
           });
           if (recordRes.ok) {
@@ -188,9 +183,9 @@ export function useUmbraSend() {
         reset({ stage: "settled", detail: null });
         return {
           activityId,
-          createProofAccountSignature: result.createProofAccountSignature.toString(),
+          createProofAccountSignature:
+            result.populateProofAccountSignature.toString(),
           createUtxoSignature: result.createUtxoSignature.toString(),
-          closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
         };
       } catch (err: any) {
         // Solana errors nest the simulation logs in cause.context.logs.

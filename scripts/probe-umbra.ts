@@ -12,7 +12,7 @@
  */
 
 import { Keypair } from "@solana/web3.js";
-import { getUserAccountQuerierFunction } from "@umbra-privacy/sdk";
+import { getUserAccountQuerierFunction } from "@umbra-privacy/sdk/query";
 import {
   createUmbraSignerFromKeypair,
   getServerUmbraClient,

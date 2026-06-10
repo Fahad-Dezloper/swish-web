@@ -10,23 +10,28 @@
  * fulfill, see [Umbra pivot](memory/project_umbra_pivot_to_client_side.md).
  */
 
-import { getUmbraClient, assertMasterSeed } from "@umbra-privacy/sdk";
-import type { IUmbraClient, IUmbraSigner } from "@umbra-privacy/sdk/interfaces";
-import type { MasterSeed } from "@umbra-privacy/sdk/types";
 import {
+  getUmbraClient,
   getCdnZkAssetProvider,
+  getDefaultZkProverDeps,
   getClaimReceiverClaimableUtxoIntoEncryptedBalanceProver,
   getClaimSelfClaimableUtxoIntoEncryptedBalanceProver,
   getClaimSelfClaimableUtxoIntoPublicBalanceProver,
-  getCreateReceiverClaimableUtxoFromPublicBalanceProver,
-  getCreateSelfClaimableUtxoFromPublicBalanceProver,
+  getATAIntoStealthPoolNoteCreatorProver,
+  getETAIntoStealthPoolNoteCreatorProver,
   getUserRegistrationProver,
-} from "@umbra-privacy/web-zk-prover";
+} from "@umbra-privacy/sdk";
 import type {
-  IZkProverForReceiverClaimableUtxo,
-  IZkProverForSelfClaimableUtxo,
-  IZkProverSuite,
-} from "@umbra-privacy/sdk/interfaces";
+  IUmbraClient,
+  IUmbraSigner,
+  MasterSeed,
+} from "@umbra-privacy/sdk";
+import type { IZkProverSuite } from "@umbra-privacy/sdk/shared";
+import type { IZkProverForATAIntoStealthPoolNote } from "@umbra-privacy/sdk/deposit";
+import { assertMasterSeed } from "@umbra-privacy/sdk/types";
+// Load-bearing: needed to scan pre-migration notes (encrypted to the v4 MVK).
+// See the getUmbraClient call below for the full rationale.
+import { masterSeedSchemeV4 } from "@umbra-privacy/sdk/master-seed-schemes";
 
 const UMBRA_INDEXER = "https://utxo-indexer.api.umbraprivacy.com";
 
@@ -37,20 +42,17 @@ let cachedSuite: IZkProverSuite | null = null;
 export function getBrowserUmbraProverSuite(): IZkProverSuite {
   if (cachedSuite) return cachedSuite;
 
-  const assetProvider = getCdnZkAssetProvider();
-  const deps = { assetProvider };
+  // v5: provers ship from the SDK (snarkjs-backed) and take the full
+  // ZkProverDeps bag. See lib/sponsor/umbraSDK.ts for the suite-shape change
+  // (the two v4 create-UTXO slots collapsed into etaIntoStealthPoolNoteCreator).
+  const deps = {
+    ...getDefaultZkProverDeps(),
+    assetProvider: getCdnZkAssetProvider(),
+  };
 
-  // Same variance cast as the server-side suite — see umbraSDK.ts for
-  // why FromPublicBalance provers need to be cast to the wider
-  // I*Utxo types for the suite slots.
   const suite: IZkProverSuite = {
     registration: getUserRegistrationProver(deps),
-    utxoSelfClaimable: getCreateSelfClaimableUtxoFromPublicBalanceProver(
-      deps
-    ) as unknown as IZkProverForSelfClaimableUtxo,
-    utxoReceiverClaimable: getCreateReceiverClaimableUtxoFromPublicBalanceProver(
-      deps
-    ) as unknown as IZkProverForReceiverClaimableUtxo,
+    etaIntoStealthPoolNoteCreator: getETAIntoStealthPoolNoteCreatorProver(deps),
     claimSelfClaimableIntoEncryptedBalance:
       getClaimSelfClaimableUtxoIntoEncryptedBalanceProver(deps),
     claimReceiverClaimableIntoEncryptedBalance:
@@ -60,6 +62,21 @@ export function getBrowserUmbraProverSuite(): IZkProverSuite {
   };
   cachedSuite = suite;
   return suite;
+}
+
+// ATA (public-balance) deposit prover — not part of IZkProverSuite (which only
+// carries the ETA creator). Direct Send / Request fulfill deposit public USDC,
+// so those flows need this. See lib/sponsor/umbraSDK.ts for the server twin.
+let cachedAtaProver: IZkProverForATAIntoStealthPoolNote | null = null;
+
+export function getBrowserUmbraAtaDepositProver(): IZkProverForATAIntoStealthPoolNote {
+  if (cachedAtaProver) return cachedAtaProver;
+  const deps = {
+    ...getDefaultZkProverDeps(),
+    assetProvider: getCdnZkAssetProvider(),
+  };
+  cachedAtaProver = getATAIntoStealthPoolNoteCreatorProver(deps);
+  return cachedAtaProver;
 }
 
 export interface BrowserUmbraClientArgs {
@@ -149,20 +166,28 @@ export async function getBrowserUmbraClient(
     return cachedClient.client;
   }
   const wsUrl = args.rpcUrl.replace(/^https?:\/\//, "wss://");
-  const masterSeedStorage = makeSessionStorageMasterSeedStorage(
-    args.signer.address
-  );
-  const promise = getUmbraClient(
-    {
-      signer: args.signer,
-      network: "mainnet",
-      rpcUrl: args.rpcUrl,
-      rpcSubscriptionsUrl: wsUrl,
-      indexerApiEndpoint: UMBRA_INDEXER,
-      deferMasterSeedSignature: args.deferMasterSeedSignature ?? true,
-    },
-    { masterSeedStorage }
-  );
+  // legacyMasterSeedSchemes + eager are LOAD-BEARING, not optional. v4-era
+  // accounts hold incoming notes encrypted to the old V4-derived MVK; the
+  // on-chain RESTORE flow re-registers the MVK but does NOT migrate those old
+  // notes' encryption, so the current-scheme scanner returns 0 for them.
+  // Passing the v4 scheme (and `eager`, so the SDK actually signs the v4
+  // message and derives the v4 MVK up front) is the only way to scan/read
+  // pre-migration notes. Verified by bisect 2026-06-11: removing this made a
+  // restored wallet's funds read as 0. Cost: an extra consent sign. Keep until
+  // a wallet's pre-migration notes are all claimed out. (Must be V4 ALONE —
+  // V2/V3/V4 share a consent message, so listing several is ambiguous.)
+  // We also don't pass our sessionStorage masterSeedStorage; the per-address
+  // `cachedClient` already avoids re-prompting within a session.
+  const promise = getUmbraClient({
+    signer: args.signer,
+    network: "mainnet",
+    rpcUrl: args.rpcUrl,
+    rpcSubscriptionsUrl: wsUrl,
+    indexerApiEndpoint: UMBRA_INDEXER,
+    deferMasterSeedSignature: args.deferMasterSeedSignature ?? true,
+    legacyMasterSeedSchemes: [masterSeedSchemeV4],
+    signSchemeMessages: "eager",
+  });
   cachedClient = { address: args.signer.address, client: promise };
   return promise;
 }

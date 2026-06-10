@@ -1,8 +1,8 @@
 /**
  * Server-side Umbra SDK helpers.
  *
- * - `getUmbraProverSuite` constructs the IZkProverSuite from web-zk-prover
- *   factory functions, with circuit assets fetched from Umbra's CDN.
+ * - `getUmbraProverSuite` constructs the IZkProverSuite from the v5 SDK's
+ *   snarkjs-backed prover factories, with circuit assets fetched from a CDN.
  * - `createUmbraSignerFromKeypair` adapts a web3.js Keypair to IUmbraSigner
  *   for the burner-pattern flows where Swish controls the keys.
  * - `getServerUmbraClient` is the entry point — wraps `getUmbraClient` with
@@ -16,24 +16,22 @@ import { Keypair } from "@solana/web3.js";
 import {
   createSignerFromPrivateKeyBytes,
   getUmbraClient,
+  getCdnZkAssetProvider,
+  getDefaultZkProverDeps,
+  getClaimReceiverClaimableUtxoIntoEncryptedBalanceProver,
+  getClaimSelfClaimableUtxoIntoEncryptedBalanceProver,
+  getClaimSelfClaimableUtxoIntoPublicBalanceProver,
+  getATAIntoStealthPoolNoteCreatorProver,
+  getETAIntoStealthPoolNoteCreatorProver,
+  getUserRegistrationProver,
 } from "@umbra-privacy/sdk";
 import type {
   IUmbraClient,
   IUmbraSigner,
-  IZkProverForReceiverClaimableUtxo,
-  IZkProverForSelfClaimableUtxo,
-  IZkProverSuite,
-} from "@umbra-privacy/sdk/interfaces";
-import type { Network } from "@umbra-privacy/sdk/constants";
-import {
-  getCdnZkAssetProvider,
-  getClaimReceiverClaimableUtxoIntoEncryptedBalanceProver,
-  getClaimSelfClaimableUtxoIntoEncryptedBalanceProver,
-  getClaimSelfClaimableUtxoIntoPublicBalanceProver,
-  getCreateReceiverClaimableUtxoFromPublicBalanceProver,
-  getCreateSelfClaimableUtxoFromPublicBalanceProver,
-  getUserRegistrationProver,
-} from "@umbra-privacy/web-zk-prover";
+  Network,
+} from "@umbra-privacy/sdk";
+import type { IZkProverSuite } from "@umbra-privacy/sdk/shared";
+import type { IZkProverForATAIntoStealthPoolNote } from "@umbra-privacy/sdk/deposit";
 
 const UMBRA_NETWORK: Network = "mainnet";
 const UMBRA_INDEXER = "https://utxo-indexer.api.umbraprivacy.com";
@@ -61,23 +59,20 @@ let cachedSuite: IZkProverSuite | null = null;
 export function getUmbraProverSuite(): IZkProverSuite {
   if (cachedSuite) return cachedSuite;
 
-  const assetProvider = getCdnZkAssetProvider();
-  const deps = { assetProvider };
+  // v5 provers ship from the SDK itself (snarkjs-backed) and take the full
+  // ZkProverDeps bag — `getDefaultZkProverDeps()` supplies clock/logger/fetch,
+  // we add the CDN asset provider for circuit downloads.
+  const deps = {
+    ...getDefaultZkProverDeps(),
+    assetProvider: getCdnZkAssetProvider(),
+  };
 
-  // The suite slots want the broader parent prover types (which handle both
-  // FromPublic and FromEncrypted inputs). The FromPublicBalance factories
-  // return narrower subtypes — TS rejects them. v1 only ever calls the
-  // public-balance side, so casting is safe at runtime; v2 (spend-from-
-  // shielded) will need to swap these for combined provers that handle both
-  // input shapes.
+  // v5 collapsed the two v4 create-UTXO slots (self/receiver claimable) into a
+  // single `etaIntoStealthPoolNoteCreator` shared by both flows, so the old
+  // variance casts are gone.
   const suite: IZkProverSuite = {
     registration: getUserRegistrationProver(deps),
-    utxoSelfClaimable: getCreateSelfClaimableUtxoFromPublicBalanceProver(
-      deps
-    ) as unknown as IZkProverForSelfClaimableUtxo,
-    utxoReceiverClaimable: getCreateReceiverClaimableUtxoFromPublicBalanceProver(
-      deps
-    ) as unknown as IZkProverForReceiverClaimableUtxo,
+    etaIntoStealthPoolNoteCreator: getETAIntoStealthPoolNoteCreatorProver(deps),
     claimSelfClaimableIntoEncryptedBalance:
       getClaimSelfClaimableUtxoIntoEncryptedBalanceProver(deps),
     claimReceiverClaimableIntoEncryptedBalance:
@@ -87,6 +82,21 @@ export function getUmbraProverSuite(): IZkProverSuite {
   };
   cachedSuite = suite;
   return suite;
+}
+
+// The ATA (public-balance) deposit prover is NOT part of IZkProverSuite — the
+// suite only carries the ETA (confidential) creator. v1 deposits move public
+// USDC into the pool, so the burner-deposit functions need this ATA prover.
+let cachedAtaProver: IZkProverForATAIntoStealthPoolNote | null = null;
+
+export function getUmbraAtaDepositProver(): IZkProverForATAIntoStealthPoolNote {
+  if (cachedAtaProver) return cachedAtaProver;
+  const deps = {
+    ...getDefaultZkProverDeps(),
+    assetProvider: getCdnZkAssetProvider(),
+  };
+  cachedAtaProver = getATAIntoStealthPoolNoteCreatorProver(deps);
+  return cachedAtaProver;
 }
 
 // web3.js Keypair `secretKey` is 64 bytes (32-byte seed + 32-byte pubkey),

@@ -22,6 +22,7 @@ import { useSOLBalance } from "@/hooks/useSOLBalance";
 import { useUmbraStatus } from "@/hooks/useUmbraStatus";
 import { useUmbraRegister } from "@/hooks/useUmbraRegister";
 import { useUmbraBalance } from "@/hooks/useUmbraBalance";
+import { useUmbraKeyConsistency } from "@/hooks/useUmbraKeyConsistency";
 
 type TabType = "wallet" | "activity";
 
@@ -57,8 +58,11 @@ export default function ProfilePage() {
     hasPending: umbraHasPending,
     status: umbraBalanceStatus,
     error: umbraBalanceError,
+    needsKeyRestore: umbraNeedsKeyRestore,
     refetch: refetchUmbraBalance,
   } = useUmbraBalance(isUmbraRegistered);
+  const { restore: restoreUmbraKeys, state: umbraKeyRestoreState } =
+    useUmbraKeyConsistency();
   const [showUnlock, setShowUnlock] = useState(false);
 
   const {
@@ -377,8 +381,41 @@ export default function ProfilePage() {
                     )}
                     {umbraBalanceStatus === "error" && umbraBalanceError && (
                       <p className="text-[#CB0000] text-xs mt-2 break-words">
-                        Balance fetch failed: {umbraBalanceError.split("\n")[0]}
+                        {umbraBalanceError.split("\n")[0]}
                       </p>
+                    )}
+                    {umbraBalanceStatus === "error" && umbraNeedsKeyRestore && (
+                      <div className="mt-3">
+                        <button
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                "This is a one-time sync: it rotates your Umbra encryption keys to the latest version and re-encrypts your shielded balance (a few wallet signatures, ~30s). Your funds are preserved. Continue?"
+                              )
+                            )
+                              return;
+                            try {
+                              await restoreUmbraKeys();
+                              await refetchUmbraBalance();
+                            } catch {
+                              /* error surfaced via umbraKeyRestoreState */
+                            }
+                          }}
+                          disabled={umbraKeyRestoreState.stage === "restoring"}
+                          className="h-9 px-5 rounded-full bg-[#121212] text-[#fafafa] text-sm font-medium disabled:opacity-50"
+                        >
+                          {umbraKeyRestoreState.stage === "restoring"
+                            ? "Syncing keys…"
+                            : "Sync keys"}
+                        </button>
+                        {umbraKeyRestoreState.stage === "error" &&
+                          umbraKeyRestoreState.error && (
+                            <p className="text-[#CB0000] text-[11px] mt-2 break-words">
+                              Sync failed:{" "}
+                              {umbraKeyRestoreState.error.split("\n")[0]}
+                            </p>
+                          )}
+                      </div>
                     )}
                   </div>
                 )}

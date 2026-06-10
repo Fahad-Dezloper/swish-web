@@ -20,10 +20,10 @@ import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
 import {
-  getClaimableUtxoScannerFunction,
-  getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction,
-  getSelfClaimableUtxoToEncryptedBalanceClaimerFunction,
-} from "@umbra-privacy/sdk";
+  getBurnableStealthPoolNoteScannerFunction,
+  getReceiverBurnableStealthPoolNoteIntoETABurnerFunction,
+  getSelfBurnableStealthPoolNoteIntoETABurnerFunction,
+} from "@umbra-privacy/sdk/burn";
 
 import {
   getBrowserUmbraClient,
@@ -31,6 +31,7 @@ import {
   getBrowserUmbraRelayer,
 } from "@/lib/client/umbraClientSDK";
 import { createUmbraSignerFromPrivyWallet } from "@/lib/client/umbraPrivySigner";
+import { splitBurnableNotes } from "@/lib/umbraScanBuckets";
 
 export type UmbraClaimStage =
   | "idle"
@@ -81,17 +82,13 @@ export function useUmbraClaim() {
       const client = await getBrowserUmbraClient({ signer, rpcUrl });
       const suite = getBrowserUmbraProverSuite();
 
-      const scanner = getClaimableUtxoScannerFunction({ client });
-      const scanResult = await scanner(BigInt(0) as any, BigInt(0) as any);
+      // v5 scanner is arg-less — auto-discovers trees + resumes from store.
+      const scanner = getBurnableStealthPoolNoteScannerFunction({ client });
+      const scanResult = await scanner();
 
-      const receiverUtxos = [
-        ...((scanResult as any).received ?? []),
-        ...((scanResult as any).publicReceived ?? []),
-      ];
-      const selfUtxos = [
-        ...((scanResult as any).selfBurnable ?? []),
-        ...((scanResult as any).publicSelfBurnable ?? []),
-      ];
+      // All receiver- + self-claimable notes (eta / ata / networkBalance).
+      const { receiver: receiverUtxos, self: selfUtxos } =
+        splitBurnableNotes(scanResult);
 
       let totalClaimed = BigInt(0);
       for (const u of [...receiverUtxos, ...selfUtxos]) {
@@ -109,33 +106,38 @@ export function useUmbraClaim() {
         error: null,
       });
 
+      // v5: the relayer instance exposes submitClaim/pollClaimStatus/
+      // getRelayerAddress; the burner deps want them as submitBurn/
+      // pollBurnStatus/getRelayerAddress. The high-level burner functions
+      // own the prepare→build→submit→poll pipeline internally.
       const relayer = await getBrowserUmbraRelayer();
+      const relayerDep = {
+        submitBurn: relayer.submitClaim,
+        pollBurnStatus: relayer.pollClaimStatus,
+        getRelayerAddress: relayer.getRelayerAddress,
+      };
 
       if (receiverUtxos.length > 0) {
-        const claimReceiver =
-          getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction(
-            { client },
-            {
-              zkProver:
-                suite.claimReceiverClaimableIntoEncryptedBalance,
-              relayer,
-              fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
-            } as any
-          );
-        await claimReceiver(receiverUtxos as any);
+        const burnReceiver = getReceiverBurnableStealthPoolNoteIntoETABurnerFunction(
+          { client },
+          {
+            zkProver: suite.claimReceiverClaimableIntoEncryptedBalance,
+            fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
+            relayer: relayerDep,
+          }
+        );
+        await burnReceiver(receiverUtxos as any);
       }
       if (selfUtxos.length > 0) {
-        const claimSelf =
-          getSelfClaimableUtxoToEncryptedBalanceClaimerFunction(
-            { client },
-            {
-              zkProver:
-                suite.claimReceiverClaimableIntoEncryptedBalance as any,
-              relayer,
-              fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
-            } as any
-          );
-        await claimSelf(selfUtxos as any);
+        const burnSelf = getSelfBurnableStealthPoolNoteIntoETABurnerFunction(
+          { client },
+          {
+            zkProver: suite.claimSelfClaimableIntoEncryptedBalance,
+            fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
+            relayer: relayerDep,
+          }
+        );
+        await burnSelf(selfUtxos as any);
       }
 
       setState({

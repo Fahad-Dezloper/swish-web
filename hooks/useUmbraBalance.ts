@@ -18,10 +18,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
-import {
-  getClaimableUtxoScannerFunction,
-  getEncryptedBalanceQuerierFunction,
-} from "@umbra-privacy/sdk";
+import { isKeyConsistencyError } from "@umbra-privacy/sdk";
+import { getBurnableStealthPoolNoteScannerFunction } from "@umbra-privacy/sdk/burn";
+import { getEncryptedBalanceQuerierFunction } from "@umbra-privacy/sdk/query";
 
 import {
   getBrowserUmbraClient,
@@ -32,6 +31,7 @@ import {
   fetchClaimedUtxoIds,
   filterUnclaimedUtxos,
 } from "@/lib/client/umbraClaimedUtxoTracker";
+import { splitBurnableNotes } from "@/lib/umbraScanBuckets";
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
@@ -51,6 +51,10 @@ interface UmbraBalanceState {
   totalUSDC: number;
   hasPending: boolean;
   error: string | null;
+  // True when the read failed because the account's on-chain encryption keys
+  // don't match the v5-derived keys (pre-migration sdk@4.0.0 account). The UI
+  // surfaces a one-time "sync keys" (restore) action in this case.
+  needsKeyRestore: boolean;
 }
 
 const ZERO_STATE: UmbraBalanceState = {
@@ -61,6 +65,7 @@ const ZERO_STATE: UmbraBalanceState = {
   totalUSDC: 0,
   hasPending: false,
   error: null,
+  needsKeyRestore: false,
 };
 
 export function useUmbraBalance(autoFetch = false) {
@@ -104,12 +109,10 @@ export function useUmbraBalance(autoFetch = false) {
       })([USDC_MINT as any]);
 
       // Now safe to parallelize. Scanner reuses the cached master seed;
-      // tracker fetch is unrelated to Umbra crypto.
+      // tracker fetch is unrelated to Umbra crypto. v5 scanner is arg-less —
+      // it auto-discovers trees and resumes from the scan-progress store.
       const [scanResult, claimedIds] = await Promise.all([
-        getClaimableUtxoScannerFunction({ client })(
-          BigInt(0) as any,
-          BigInt(0) as any
-        ),
+        getBurnableStealthPoolNoteScannerFunction({ client })(),
         fetchClaimedUtxoIds(userAddress),
       ]);
 
@@ -120,16 +123,13 @@ export function useUmbraBalance(autoFetch = false) {
         encryptedBaseUnits = (usdcResult as any).balance as bigint;
       }
 
-      // Pending UTXOs: sum amounts from all 4 buckets that the user has
-      // a claim path for, AFTER filtering out already-claimed leaves
-      // (server-tracked). `received` / `publicReceived` are incoming
-      // sends from others; `selfBurnable` / `publicSelfBurnable` are
-      // own deposits not yet claimed.
+      // Pending UTXOs: all receiver- + self-claimable notes (across eta / ata /
+      // networkBalance sources), AFTER filtering out already-claimed leaves
+      // (server-tracked).
+      const { receiver, self } = splitBurnableNotes(scanResult);
       const pendingBuckets = filterUnclaimedUtxos(claimedIds, [
-        ...((scanResult as any).received ?? []),
-        ...((scanResult as any).publicReceived ?? []),
-        ...((scanResult as any).selfBurnable ?? []),
-        ...((scanResult as any).publicSelfBurnable ?? []),
+        ...receiver,
+        ...self,
       ]);
       let pendingBaseUnits = BigInt(0);
       for (const utxo of pendingBuckets) {
@@ -149,14 +149,19 @@ export function useUmbraBalance(autoFetch = false) {
         totalUSDC: Number(totalBaseUnits) / 1_000_000,
         hasPending: pendingBaseUnits > BigInt(0),
         error: null,
+        needsKeyRestore: false,
       });
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error("[useUmbraBalance] error:", err);
+      const needsKeyRestore = isKeyConsistencyError(err);
       setState({
         ...ZERO_STATE,
         status: "error",
-        error: err?.message ?? String(err),
+        error: needsKeyRestore
+          ? "Your Umbra keys need a one-time sync before your shielded balance can be read."
+          : err?.message ?? String(err),
+        needsKeyRestore,
       });
     }
   }, [standardWallets, connectedWallets]);

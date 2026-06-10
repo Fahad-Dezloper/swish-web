@@ -24,15 +24,12 @@
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
-import {
-  getPublicBalanceToReceiverClaimableUtxoCreatorFunction,
-  getUserAccountQuerierFunction,
-} from "@umbra-privacy/sdk";
-import type { ZkProverForReceiverClaimableUtxoFromPublicBalance } from "@umbra-privacy/sdk/interfaces";
+import { getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction } from "@umbra-privacy/sdk/deposit";
+import { getUserAccountQuerierFunction } from "@umbra-privacy/sdk/query";
 
 import {
   getBrowserUmbraClient,
-  getBrowserUmbraProverSuite,
+  getBrowserUmbraAtaDepositProver,
 } from "@/lib/client/umbraClientSDK";
 import { createUmbraSignerFromPrivyWallet } from "@/lib/client/umbraPrivySigner";
 
@@ -179,13 +176,9 @@ export function useUmbraSendClaim() {
           detail: "Sign each prompt to complete the private send (~3 prompts)",
         });
 
-        const suite = getBrowserUmbraProverSuite();
-        const deposit = getPublicBalanceToReceiverClaimableUtxoCreatorFunction(
+        const deposit = getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction(
           { client },
-          {
-            zkProver:
-              suite.utxoReceiverClaimable as unknown as ZkProverForReceiverClaimableUtxoFromPublicBalance,
-          }
+          { zkProver: getBrowserUmbraAtaDepositProver() }
         );
 
         const amountBaseUnits = BigInt(Math.floor(params.amount * 1_000_000));
@@ -205,10 +198,9 @@ export function useUmbraSendClaim() {
             activityId,
             senderPublicKey: params.senderPublicKey,
             createUtxoSignature: result.createUtxoSignature.toString(),
+            // v5: populateProofAccountSignature replaces v4's create/close pair.
             createProofAccountSignature:
-              result.createProofAccountSignature.toString(),
-            closeProofAccountSignature:
-              result.closeProofAccountSignature?.toString(),
+              result.populateProofAccountSignature.toString(),
           }),
         });
         if (!recordRes.ok) {
@@ -229,8 +221,8 @@ export function useUmbraSendClaim() {
           passphrase,
           claimLink,
           createUtxoSignature: result.createUtxoSignature.toString(),
-          createProofAccountSignature: result.createProofAccountSignature.toString(),
-          closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
+          createProofAccountSignature:
+            result.populateProofAccountSignature.toString(),
         };
       } catch (err: any) {
         // Walk error cause chain to surface Solana sim logs (same

@@ -50,12 +50,16 @@ import {
   createTransferInstruction,
   TokenAccountNotFoundError,
 } from "@solana/spl-token";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import {
-  getClaimableUtxoScannerFunction,
-  getEncryptedBalanceQuerierFunction,
-  getEncryptedBalanceToPublicBalanceDirectWithdrawerFunction,
-  getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction,
-} from "@umbra-privacy/sdk";
+  getBurnableStealthPoolNoteScannerFunction,
+  getReceiverBurnableStealthPoolNoteIntoETABurnerFunction,
+} from "@umbra-privacy/sdk/burn";
+import { getEncryptedBalanceQuerierFunction } from "@umbra-privacy/sdk/query";
+import { getETAIntoATAWithdrawerFunction } from "@umbra-privacy/sdk/withdrawal";
 
 import { TOKEN_MINTS, TokenType } from "../privacycash/tokens";
 import {
@@ -465,10 +469,12 @@ async function runUmbraClaimToRecipient(
 
   // Step 1a: scan claimable UTXOs at burner's address. Sender's
   // Direct Send landed in the `publicReceived` bucket (public-balance
-  // deposit sent to us by another party).
-  const scanner = getClaimableUtxoScannerFunction({ client });
-  const scanResult = await scanner(BigInt(0) as any, BigInt(0) as any);
-  const receiverClaimableUtxos = scanResult.publicReceived;
+  // deposit sent to us by another party). v5 scanner is arg-less.
+  const scanner = getBurnableStealthPoolNoteScannerFunction({ client });
+  const scanResult = await scanner();
+  // v5 renamed buckets: v4 `publicReceived` (public-ATA deposit sent to us
+  // by another party) → `ataToStealthPoolReceiverBurnable`.
+  const receiverClaimableUtxos = scanResult.ataToStealthPoolReceiverBurnable;
 
   if (receiverClaimableUtxos.length === 0) {
     throw new Error(
@@ -477,18 +483,29 @@ async function runUmbraClaimToRecipient(
   }
 
   // Step 1b: claim receiver-claimable UTXOs into burner's encrypted
-  // balance. 0.7% protocol + relayer fee fires here. Relayer is
-  // constructed once and reused.
+  // balance. 0.7% protocol + relayer fee fires here. v5: the relayer
+  // instance exposes submitClaim/pollClaimStatus/getRelayerAddress; the
+  // burner deps want them as submitBurn/pollBurnStatus/getRelayerAddress.
+  // The burner function owns the submit→poll pipeline internally.
   const relayer = await getServerUmbraRelayer();
-  const claimer = getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction(
+  const burnReceiver = getReceiverBurnableStealthPoolNoteIntoETABurnerFunction(
     { client },
     {
-      zkProver: suite.claimReceiverClaimableIntoEncryptedBalance as any,
-      relayer: relayer as any,
+      zkProver: suite.claimReceiverClaimableIntoEncryptedBalance,
       fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
-    } as any
+      relayer: {
+        submitBurn: relayer.submitClaim,
+        pollBurnStatus: relayer.pollClaimStatus,
+        getRelayerAddress: relayer.getRelayerAddress,
+      },
+    }
   );
-  await claimer(receiverClaimableUtxos as any);
+  // DevEx #6 mitigation: the burn prepare stage writes the full ZK witness
+  // to os.tmpdir() unconditionally during proof generation. Isolate the
+  // claim under a throwaway TMPDIR and wipe it after, so the plaintext
+  // private witness never lingers on disk. (Flagged to Cal for an upstream
+  // env-gate; remove once the SDK gates it.)
+  await withWitnessIsolation(() => burnReceiver(receiverClaimableUtxos as any));
 
   // Step 2: poll for Arcium MPC to credit the burner's encrypted
   // balance. Relayer-submitted claim tx lands quickly; Arcium takes
@@ -525,9 +542,7 @@ async function runUmbraClaimToRecipient(
     new PublicKey(USDC_MINT),
     burnerKeypair.publicKey
   );
-  const withdraw = getEncryptedBalanceToPublicBalanceDirectWithdrawerFunction(
-    { client }
-  );
+  const withdraw = getETAIntoATAWithdrawerFunction({ client });
   await withdraw(
     burnerKeypair.publicKey.toBase58() as any,
     USDC_MINT as any,
@@ -549,6 +564,33 @@ async function runUmbraClaimToRecipient(
   await sweepBurnerSol(connection, burnerKeypair).catch(() => null);
 
   return transferSig;
+}
+
+/**
+ * DevEx #6 mitigation. The Umbra SDK's burn prepare stage writes the full ZK
+ * witness (zkCircuitInputs) to `os.tmpdir()` unconditionally on every claim —
+ * a plaintext private-witness leak. `os.tmpdir()` honors `TMPDIR` per-call, so
+ * we point it at a throwaway dir for the duration of the claim and `rm -rf` it
+ * after, ensuring the witness never lingers on disk.
+ *
+ * Concurrency caveat: `TMPDIR` is process-global, so overlapping claims share
+ * whichever dir was set last — but every claim still wipes its own dir, so no
+ * witness survives. SC claims are recipient-initiated and rare, so the small
+ * window where a concurrent claim's in-progress witness could be wiped (a
+ * retryable correctness blip, not a leak) is acceptable. Remove this shim once
+ * the SDK env-gates the dump upstream.
+ */
+async function withWitnessIsolation<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = process.env.TMPDIR;
+  const dir = mkdtempSync(join(tmpdir(), "umbra-claim-"));
+  process.env.TMPDIR = dir;
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // Cached relayer instance (constructor is cheap but caching avoids repeats).

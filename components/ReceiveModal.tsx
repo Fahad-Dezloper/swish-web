@@ -8,7 +8,6 @@ import { Spinner } from "./Spinner";
 import { NumberPad } from "./NumberPad";
 import { AmountField } from "./AmountField";
 import { formatNumber, appendAmountKey, decimalsForAsset } from "@/utils";
-import { useProtocolFee } from "@/hooks/useProtocolFee";
 import {
   useSessionSignature,
   type GetSessionSignature,
@@ -54,15 +53,10 @@ export function ReceiveModal({
       setAmount(amount.slice(0, -1));
     }
   };
-  // Requester doesn't pick a protocol — the payer picks at fulfill time.
-  // Show worst-case fee (PC, the auto-router default). Other protocols
-  // may charge less (MB ~0, Umbra 0).
-  const { feeUSDC: partnerFee, breakdown: feeBreakdown } = useProtocolFee(
-    "auto",
-    numAmount,
-    "fulfill"
-  );
-  const youReceive = numAmount - partnerFee;
+  // No fee shown on request creation: the requester isn't transacting yet,
+  // and the fee depends on the route the PAYER picks at fulfill time (unknown
+  // here). Fees surface where money actually moves — the fulfill page (payer's
+  // send fee) and the UnlockModal (requester's unshield fee).
 
   const handleProceed = async () => {
     const session = await getSignature();
@@ -217,16 +211,8 @@ export function ReceiveModal({
             {/* Amount Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
-                <span className="text-[#121212]">Amount</span>
-                <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#121212]">Partner Fees</span>
-                <span className="text-[#121212]">~{formatNumber(partnerFee)} USDC</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#121212] font-semibold">You Receive</span>
-                <span className="text-[#121212] font-semibold">~{formatNumber(youReceive)} USDC</span>
+                <span className="text-[#121212] font-semibold">Amount</span>
+                <span className="text-[#121212] font-semibold">{formatNumber(numAmount)} USDC</span>
               </div>
             </div>
 
@@ -264,16 +250,8 @@ export function ReceiveModal({
             {/* Success Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
-                <span className="text-[#121212]">Amount</span>
-                <span className="text-[#121212]">{formatNumber(numAmount)} USDC</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#121212]">Partner Fees</span>
-                <span className="text-[#121212]">~{formatNumber(partnerFee)} USDC</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#121212] font-semibold">You Receive</span>
-                <span className="text-[#121212] font-semibold">~{formatNumber(youReceive)} USDC</span>
+                <span className="text-[#121212] font-semibold">Amount</span>
+                <span className="text-[#121212] font-semibold">{formatNumber(numAmount)} USDC</span>
               </div>
             </div>
 
