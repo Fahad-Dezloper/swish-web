@@ -27,6 +27,8 @@
     READY: "swish:plug:ready",
     CONFIG: "swish:plug:config",
     RESIZE: "swish:plug:resize",
+    EXPAND: "swish:plug:expand",
+    COLLAPSE: "swish:plug:collapse",
     SUCCESS: "swish:plug:success",
     ERROR: "swish:plug:error",
     CLOSE: "swish:plug:close",
@@ -53,12 +55,18 @@
       ".swish-plug-bd{position:fixed;inset:0;z-index:2147483647;background:rgba(18,18,18,.6);" +
       "display:flex;align-items:center;justify-content:center;padding:16px;animation:swishPlugFade .15s ease}" +
       ".swish-plug-fr{width:100%;max-width:400px;height:520px;max-height:90vh;border:0;border-radius:24px;" +
-      "background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.35)}" +
+      "background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.35);" +
+      "transition:width .2s ease,height .2s ease,max-width .2s ease,max-height .2s ease,border-radius .2s ease}" +
+      // Taller while a Privy modal (connect / signing) is open, so it has room.
+      // Width + rounded corners stay intact — we only grow the height. A modest
+      // fixed height on desktop (capped to the viewport); near-full on phones.
+      ".swish-plug-fr--full{height:600px!important;max-height:90vh!important}" +
       "@keyframes swishPlugFade{from{opacity:0}to{opacity:1}}" +
       "@keyframes swishPlugUp{from{transform:translateY(100%)}to{transform:translateY(0)}}" +
       "@media (max-width:640px){.swish-plug-bd{align-items:flex-end;padding:0}" +
       ".swish-plug-fr{max-width:none;border-radius:20px 20px 0 0;" +
-      "box-shadow:0 -8px 40px rgba(0,0,0,.35);animation:swishPlugUp .25s ease}}";
+      "box-shadow:0 -8px 40px rgba(0,0,0,.35);animation:swishPlugUp .25s ease}" +
+      ".swish-plug-fr--full{height:90vh!important}}";
     document.head.appendChild(s);
   }
 
@@ -78,6 +86,11 @@
     iframe.src = buildSrc(baseUrl, opts);
     iframe.allow = "clipboard-write; payment";
     backdrop.appendChild(iframe);
+
+    // Last height the widget reported, so we can restore the card size after a
+    // full-screen Privy modal collapses.
+    var lastHeight = 0;
+    var expanded = false;
 
     var closed = false;
     function cleanup() {
@@ -103,10 +116,24 @@
           );
           break;
         case MSG.RESIZE:
-          // Size the dialog to the card's content height.
+          // Size the dialog to the card's content height (ignored while
+          // expanded — the full-screen class owns the size then).
           if (typeof data.height === "number" && data.height > 0) {
-            iframe.style.height = data.height + "px";
+            lastHeight = data.height;
+            if (!expanded) iframe.style.height = data.height + "px";
           }
+          break;
+        case MSG.EXPAND:
+          // A Privy modal opened — give it the whole viewport.
+          expanded = true;
+          iframe.style.height = "";
+          iframe.classList.add("swish-plug-fr--full");
+          break;
+        case MSG.COLLAPSE:
+          // Privy modal closed — restore the card.
+          expanded = false;
+          iframe.classList.remove("swish-plug-fr--full");
+          if (lastHeight > 0) iframe.style.height = lastHeight + "px";
           break;
         case MSG.SUCCESS:
           if (typeof opts.onSuccess === "function") {
@@ -124,9 +151,10 @@
       }
     }
 
-    // Click outside the dialog closes it (a dismiss).
+    // Click outside the dialog closes it (a dismiss) — but not while a Privy
+    // modal is expanded over the backdrop.
     backdrop.addEventListener("click", function (e) {
-      if (e.target === backdrop) {
+      if (e.target === backdrop && !expanded) {
         if (typeof opts.onClose === "function") opts.onClose();
         cleanup();
       }

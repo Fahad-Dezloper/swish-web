@@ -8,6 +8,8 @@ export const PLUG_MSG = {
   READY: "swish:plug:ready",
   CONFIG: "swish:plug:config",
   RESIZE: "swish:plug:resize",
+  EXPAND: "swish:plug:expand",
+  COLLAPSE: "swish:plug:collapse",
   SUCCESS: "swish:plug:success",
   ERROR: "swish:plug:error",
   CLOSE: "swish:plug:close",

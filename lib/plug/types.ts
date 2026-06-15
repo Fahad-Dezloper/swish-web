@@ -39,6 +39,10 @@ export const PLUG_MSG = {
   CONFIG: "swish:plug:config",
   /** iframe -> host: content height changed (auto-resize). */
   RESIZE: "swish:plug:resize",
+  /** iframe -> host: a Privy modal opened — grow the iframe to full-screen. */
+  EXPAND: "swish:plug:expand",
+  /** iframe -> host: the Privy modal closed — restore the card size. */
+  COLLAPSE: "swish:plug:collapse",
   /** iframe -> host: payment confirmed. */
   SUCCESS: "swish:plug:success",
   /** iframe -> host: payment failed. */
@@ -51,6 +55,8 @@ export type PlugMessage =
   | { type: typeof PLUG_MSG.READY }
   | { type: typeof PLUG_MSG.CONFIG; config: PlugConfig }
   | { type: typeof PLUG_MSG.RESIZE; height: number }
+  | { type: typeof PLUG_MSG.EXPAND }
+  | { type: typeof PLUG_MSG.COLLAPSE }
   | { type: typeof PLUG_MSG.SUCCESS; txSignature: string; reference?: string }
   | { type: typeof PLUG_MSG.ERROR; message: string }
   | { type: typeof PLUG_MSG.CLOSE };

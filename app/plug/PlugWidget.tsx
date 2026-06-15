@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useModalStatus } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { PublicKey } from "@solana/web3.js";
 
 import { useSendTransaction } from "@/hooks/useSendTransaction";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
+import { useUSDCBalance } from "@/hooks/useUSDCBalance";
+import { useProtocolFee } from "@/hooks/useProtocolFee";
+import { formatNumber } from "@/utils";
+import { ProtocolBadge } from "@/components/ProtocolBadge";
 import { isProviderDisabled } from "@/lib/providers/maintenance";
 import type { ProviderId } from "@/lib/providers/types";
 import {
@@ -17,6 +21,7 @@ import {
 } from "@/lib/plug/types";
 import Image from "next/image";
 import { Spinner, AmountField } from "@/components";
+import { WidgetWalletPill } from "./WidgetWalletPill";
 
 type Phase =
   | "init" // parsing config
@@ -48,7 +53,8 @@ function isValidAddress(addr: string): boolean {
 
 export function PlugWidget() {
   const params = useSearchParams();
-  const { ready, connectWallet, login, logout } = usePrivy();
+  const { ready, connectWallet, login } = usePrivy();
+  const { isOpen: privyModalOpen } = useModalStatus();
   const { wallets } = useWallets();
   const { send } = useSendTransaction();
 
@@ -64,8 +70,16 @@ export function PlugWidget() {
   const [recipient, setRecipient] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [routedProvider, setRoutedProvider] = useState<ProviderId | null>(null);
+  // Whether the payer explicitly connected in THIS widget session.
+  const [hasConnected, setHasConnected] = useState(false);
 
-  const connectedWallet = wallets[0] || null;
+  const rawWallet = wallets[0] || null;
+  // Don't treat a wallet restored from a prior Privy session (the iframe shares
+  // swish.cash's session) as connected — require an explicit connect here, so
+  // the payer always picks the wallet they pay from instead of inheriting one.
+  const connectedWallet = hasConnected ? rawWallet : null;
+  const { balance: usdcBalance } = useUSDCBalance(connectedWallet?.address ?? null);
 
   // --- 1. Load config: URL params first, postMessage as a fallback/override ---
   useEffect(() => {
@@ -117,6 +131,14 @@ export function PlugWidget() {
     setEmbedded(window.parent !== window);
   }, []);
 
+  // When a Privy modal (wallet picker or message-signing) is open, ask the SDK
+  // to expand the iframe to full-screen so the modal has room; collapse when it
+  // closes. Driven by the modal's actual visibility, so success, cancel, and
+  // close are all covered without racing connectWallet()'s promise.
+  useEffect(() => {
+    postToHost({ type: privyModalOpen ? PLUG_MSG.EXPAND : PLUG_MSG.COLLAPSE });
+  }, [privyModalOpen]);
+
   // Report content height to the host so the SDK can size the iframe to the
   // card (centered dialog on desktop, bottom sheet on mobile).
   const rootRef = useRef<HTMLDivElement>(null);
@@ -146,6 +168,7 @@ export function PlugWidget() {
     phase === "review" && numAmount > 0 && effectiveRecipient.length > 0;
 
   const handleConnect = useCallback(async () => {
+    setHasConnected(true);
     try {
       // Prefer a pure wallet connect; fall back to the login modal if the
       // installed Privy build doesn't expose connectWallet.
@@ -186,6 +209,40 @@ export function PlugWidget() {
     },
     []
   );
+
+  // Resolve the route reactively (sender + receiver only — independent of
+  // amount) so the breakdown can show "Routed via" + the protocol's fee before
+  // the payer commits.
+  const receiverValid = isValidAddress(effectiveRecipient);
+  useEffect(() => {
+    const sender = senderAddress || connectedWallet?.address;
+    if (!sender || !receiverValid) {
+      setRoutedProvider(null);
+      return;
+    }
+    let cancelled = false;
+    resolveRoute(sender, effectiveRecipient).then((p) => {
+      if (!cancelled) setRoutedProvider(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    senderAddress,
+    connectedWallet?.address,
+    effectiveRecipient,
+    receiverValid,
+    resolveRoute,
+  ]);
+
+  // Per-protocol fee for the resolved rail (PC worst-case until resolved).
+  const { feeUSDC: partnerFee, breakdown: feeBreakdown } = useProtocolFee(
+    routedProvider ?? "auto",
+    numAmount,
+    "send"
+  );
+  const total = numAmount - partnerFee;
+  const showBreakdown = numAmount > 0 && receiverValid;
 
   const handlePay = useCallback(async () => {
     if (!config || !connectedWallet || !effectiveRecipient) return;
@@ -248,28 +305,25 @@ export function PlugWidget() {
     numAmount,
   ]);
 
-  const handleDisconnect = useCallback(async () => {
-    try {
-      // External (connect-only) wallets expose their own disconnect; fall back
-      // to a full Privy logout for embedded/authenticated sessions.
-      const w: any = connectedWallet;
-      if (w && typeof w.disconnect === "function") {
-        await w.disconnect();
-      } else {
-        await logout();
-      }
-    } catch {
-      // ignore — phase machine returns to "connect" when the wallet clears
+  const handleDisconnect = useCallback(() => {
+    // Best-effort disconnect of the connected wallet. This is CONNECTOR-level
+    // only — it never logs the user out of Privy (logout is a separate action we
+    // deliberately avoid, since the iframe shares swish.cash's session).
+    // Phantom/MetaMask no-op here (no programmatic disconnect); that's fine. We
+    // always forget the wallet locally so the widget returns to the connect
+    // screen regardless.
+    const w = rawWallet;
+    if (w && typeof w.disconnect === "function") {
+      Promise.resolve(w.disconnect()).catch(() => {
+        // ignore — local forget below still returns us to the connect screen
+      });
     }
-  }, [connectedWallet, logout]);
+    setHasConnected(false);
+  }, [rawWallet]);
 
   const handleClose = useCallback(() => {
     postToHost({ type: PLUG_MSG.CLOSE });
   }, []);
-
-  const shortAddr = connectedWallet
-    ? `${connectedWallet.address.slice(0, 4)}…${connectedWallet.address.slice(-4)}`
-    : null;
 
   // --- render ---
   // The route renders ONLY the card content and fills the iframe. The SDK draws
@@ -288,14 +342,9 @@ export function PlugWidget() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-6 pb-2">
         <div className="flex items-center gap-2">
-          <Image
-            src="/assets/logo.svg"
-            alt="Swish"
-            width={26}
-            height={14}
-            className="h-3.5 w-auto"
-          />
-          <h2 className="text-2xl font-semibold text-[#121212]">Deposit</h2>
+          <h2 className="text-2xl font-medium text-[#121212]">
+            Deposit privately
+          </h2>
         </div>
         <button
           onClick={handleClose}
@@ -319,19 +368,14 @@ export function PlugWidget() {
           phase === "error") &&
           config && (
             <div>
-              {/* Connected wallet / disconnect */}
-              {shortAddr && (
-                <div className="flex justify-end mb-3">
-                  <button
-                    onClick={handleDisconnect}
+              {/* Connected wallet pill (payer's external wallet) */}
+              {connectedWallet && (
+                <div className="flex justify-center mb-3 mt-6">
+                  <WidgetWalletPill
+                    address={connectedWallet.address}
+                    onDisconnect={handleDisconnect}
                     disabled={phase === "processing"}
-                    className="flex items-center gap-1.5 text-xs text-[#121212]/50 hover:text-[#121212] disabled:opacity-40 transition-colors"
-                    title="Disconnect wallet"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#008834]" />
-                    {shortAddr}
-                    <span className="opacity-60">· Disconnect</span>
-                  </button>
+                  />
                 </div>
               )}
 
@@ -366,6 +410,11 @@ export function PlugWidget() {
                     </div>
                   </div>
                 )}
+                {connectedWallet && usdcBalance != null && (
+                  <p className="text-xs text-[#121212]/50 mt-1.5 text-center">
+                    {formatNumber(usdcBalance)} USDC available
+                  </p>
+                )}
               </div>
 
               {/* Recipient */}
@@ -384,6 +433,46 @@ export function PlugWidget() {
                   className="w-full h-12 px-4 rounded-full border border-[#121212]/10 bg-transparent text-[#121212] outline-none focus:border-[#121212]/30 transition-colors disabled:opacity-70 truncate"
                 />
               </div>
+
+              {/* Amount / route / fee breakdown — same shape as the app flows */}
+              {showBreakdown && (
+                <div className="space-y-2 mb-5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-[#121212]/60">Amount</span>
+                    <span className="text-[#121212]">
+                      {formatNumber(numAmount)} USDC
+                    </span>
+                  </div>
+                  {routedProvider && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#121212]/60">Routed via</span>
+                      <span className="flex items-center gap-1.5 text-[#121212]">
+                        <span className="text-[10px] font-medium text-[#121212]/60 uppercase tracking-wide px-1.5 py-0.5 rounded-md border border-[#121212]/15">
+                          Auto
+                        </span>
+                        <ProtocolBadge providerId={routedProvider} iconSize={16} />
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <div>
+                      <span className="text-[#121212]/60">Partner Fees</span>
+                      <span className="text-[#121212]/40 text-xs ml-1">
+                        ({feeBreakdown})
+                      </span>
+                    </div>
+                    <span className="text-[#121212]">
+                      ~{formatNumber(partnerFee)} USDC
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#121212] font-medium">They receive</span>
+                    <span className="text-[#121212] font-medium">
+                      ~{formatNumber(total)} USDC
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {error && phase === "error" && (
                 <p className="text-sm text-[#CB0000] text-center mb-3">{error}</p>
@@ -404,7 +493,7 @@ export function PlugWidget() {
                   disabled={!canPay}
                   className="w-full h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
                 >
-                  Deposit{numAmount > 0 ? ` $${numAmount}` : ""} USDC
+                  Deposit
                 </button>
               )}
 
@@ -417,10 +506,19 @@ export function PlugWidget() {
                 </button>
               )}
 
-              <p className="text-[11px] text-center text-[#121212]/40 leading-snug mt-4">
-                You need SOL for gas + USDC in your wallet. Powered by Swish —
-                Privacy, made simple.
+              <p className="text-[11px] text-center text-[#121212]/40 leading-snug mt-1.5">
+                You need SOL for gas + USDC in your wallet.
               </p>
+              <div className="flex items-center justify-center gap-1.5 mt-8 text-[11px] text-[#121212]/40">
+                Powered by
+                <Image
+                  src="/assets/logo.svg"
+                  alt="Swish"
+                  width={24}
+                  height={13}
+                  className="h-3 w-auto"
+                />
+              </div>
             </div>
           )}
 

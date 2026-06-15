@@ -19,12 +19,15 @@ const MODAL_CSS =
   ".swish-plug-bd{position:fixed;inset:0;z-index:2147483647;background:rgba(18,18,18,.6);" +
   "display:flex;align-items:center;justify-content:center;padding:16px;animation:swishPlugFade .15s ease}" +
   ".swish-plug-fr{width:100%;max-width:400px;max-height:90vh;border:0;border-radius:24px;" +
-  "background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.35)}" +
+  "background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.35);" +
+  "transition:width .2s ease,height .2s ease,max-width .2s ease,max-height .2s ease,border-radius .2s ease}" +
+  ".swish-plug-fr--full{height:600px!important;max-height:90vh!important}" +
   "@keyframes swishPlugFade{from{opacity:0}to{opacity:1}}" +
   "@keyframes swishPlugUp{from{transform:translateY(100%)}to{transform:translateY(0)}}" +
   "@media (max-width:640px){.swish-plug-bd{align-items:flex-end;padding:0}" +
   ".swish-plug-fr{max-width:none;border-radius:20px 20px 0 0;" +
-  "box-shadow:0 -8px 40px rgba(0,0,0,.35);animation:swishPlugUp .25s ease}}";
+  "box-shadow:0 -8px 40px rgba(0,0,0,.35);animation:swishPlugUp .25s ease}" +
+  ".swish-plug-fr--full{height:90vh!important}}";
 
 function buildSrc(baseUrl: string, props: PlugProps): string {
   const params = new URLSearchParams();
@@ -61,6 +64,9 @@ export function Plug(props: PlugProps) {
 
   const [open, setOpen] = useState(false);
   const [height, setHeight] = useState(520);
+  // Full-screen while a Privy modal (connect / signing) is open inside the
+  // iframe, so it has room; back to the card size when it closes.
+  const [expanded, setExpanded] = useState(false);
   const origin = useMemo(() => baseUrl.replace(/\/$/, ""), [baseUrl]);
   const src = useMemo(() => buildSrc(baseUrl, props), [baseUrl, props]);
 
@@ -97,6 +103,12 @@ export function Plug(props: PlugProps) {
           if (typeof data.height === "number" && data.height > 0) {
             setHeight(data.height);
           }
+          break;
+        case PLUG_MSG.EXPAND:
+          setExpanded(true);
+          break;
+        case PLUG_MSG.COLLAPSE:
+          setExpanded(false);
           break;
         case PLUG_MSG.SUCCESS:
           handlers.current.onSuccess?.(data.txSignature, data.reference);
@@ -159,18 +171,20 @@ export function Plug(props: PlugProps) {
           <div
             className="swish-plug-bd"
             onClick={(e) => {
-              if (e.target === e.currentTarget) {
+              // Don't dismiss by clicking the dim area while a Privy modal is
+              // expanded over it.
+              if (e.target === e.currentTarget && !expanded) {
                 handlers.current.onClose?.();
                 setOpen(false);
               }
             }}
           >
             <iframe
-              className="swish-plug-fr"
+              className={expanded ? "swish-plug-fr swish-plug-fr--full" : "swish-plug-fr"}
               src={src}
               title="Deposit privately with Swish"
               allow="clipboard-write; payment"
-              style={{ height }}
+              style={expanded ? undefined : { height }}
             />
           </div>
         </>
