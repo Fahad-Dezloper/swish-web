@@ -1,0 +1,64 @@
+<!doctype html>
+<!--
+  The Plug — local integration demo.
+
+  Run the Swish app on http://localhost:3000, then open this file from a
+  DIFFERENT origin to exercise the real cross-origin iframe path, e.g.:
+
+    npx serve examples            # serves on http://localhost:3001
+    open http://localhost:3001/plug-demo.html
+
+  (Opening via file:// also works for a quick look, but a second http origin
+  is the honest test of the postMessage bridge + frame-ancestors carve-out.)
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Plug — demo merchant</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; color: #121212; }
+      button { background: #008834; color: #fff; border: 0; border-radius: 999px; padding: 14px 28px; font-size: 16px; cursor: pointer; }
+      pre { background: #f4f4f4; padding: 12px; border-radius: 12px; font-size: 13px; white-space: pre-wrap; }
+      h1 { font-size: 20px; }
+    </style>
+  </head>
+  <body>
+    <h1>🧦 Acme Store — checkout</h1>
+    <p>One private USDC payment, one button. No protocol plumbing on our side.</p>
+
+    <!-- The SDK injects the branded "Deposit Privately" button here. -->
+    <div id="pay-slot"></div>
+
+    <h3>Event log</h3>
+    <pre id="log">(waiting…)</pre>
+
+    <!-- In production: https://swish.cash/plug.js -->
+    <script src="http://localhost:3000/plug.js"></script>
+    <script>
+      var log = document.getElementById("log");
+      function append(line) {
+        log.textContent =
+          (log.textContent === "(waiting…)" ? "" : log.textContent + "\n") + line;
+      }
+
+      Plug.mount("#pay-slot", {
+        baseUrl: "http://localhost:3000", // omit in production -> swish.cash
+        // Both `recipient` and `amount` are optional. Preset them to lock the
+        // fields (merchant checkout); omit them and the payer enters both.
+        // recipient: "merchant.sol",
+        // amount: 25,
+        reference: "order_" + Math.floor(Date.now() / 1000),
+        onSuccess: function (sig, ref) {
+          append("✓ SUCCESS — ref=" + ref + " tx=" + sig);
+        },
+        onError: function (msg) {
+          append("✗ ERROR — " + msg);
+        },
+        onClose: function () {
+          append("• closed");
+        },
+      });
+    </script>
+  </body>
+</html>
