@@ -8,7 +8,7 @@ import React, {
 import { PLUG_MSG, type PlugProps } from "./types";
 import { SwishMark } from "./SwishMark";
 
-const DEFAULT_BASE = "https://swish.cash";
+const DEFAULT_BASE = "https://plug.swish.cash";
 
 // Below this trigger width we drop "Privately" and show just "Deposit".
 const COMPACT_WIDTH = 150;

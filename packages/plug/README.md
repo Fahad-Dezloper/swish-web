@@ -16,7 +16,7 @@ import { Plug } from "@swishdotcash/plug";
 <Plug
   recipient="merchant.sol"        // Solana address OR Swish @handle
   amount={25.0}                   // optional — omit to let the payer type it
-  reference="order_1234"          // your order id, echoed back on success
+  reference="order_1234"          // optional — your order id, echoed back on success
   onSuccess={(txSignature, reference) => markOrderPaid(reference)}
   onError={(message) => console.error(message)}
   onClose={() => {}}
@@ -26,7 +26,7 @@ import { Plug } from "@swishdotcash/plug";
 ## Plain HTML (no build step)
 
 ```html
-<script src="https://swish.cash/plug.js"></script>
+<script src="https://plug.swish.cash/plug.js"></script>
 <script>
   Plug.open({
     recipient: "merchant.sol",
@@ -40,7 +40,7 @@ import { Plug } from "@swishdotcash/plug";
 ## How it works
 
 `<Plug />` renders a branded **"Deposit Privately"** button (auto-shrinks to
-"Deposit" when cramped). Clicking it opens the hosted widget (`swish.cash/plug`)
+"Deposit" when cramped). Clicking it opens the hosted widget (`plug.swish.cash/plug`)
 in a modal iframe and relays its events over `postMessage`. The iframe only
 loads on click. All wallet + protocol logic stays in the hosted route, so this
 package bundles **no** Solana or wallet dependencies — `react` is the only peer
@@ -72,8 +72,8 @@ The same hosted route doubles as a **redirect / hosted-checkout** target (pass a
 | `recipient` | `string`                                        | Solana address or Swish `@handle`. Omit to let the payer enter it. |
 | `amount`    | `number`                                        | USDC. If set, the field is locked.               |
 | `token`     | `"USDC"`                                        | v1 supports USDC only.                           |
-| `reference` | `string`                                        | Echoed back verbatim in `onSuccess`.             |
-| `baseUrl`   | `string`                                        | Hosted Plug origin. Defaults to `swish.cash`.    |
+| `reference` | `string`                                        | Optional. Your own order id, echoed back verbatim in `onSuccess`. Omit if you have no order to track. |
+| `baseUrl`   | `string`                                        | Hosted Plug origin. Defaults to `plug.swish.cash`. |
 | `label`     | `string`                                        | Override button text. Defaults to "Deposit Privately". |
 | `compact`   | `boolean`                                       | Force the short "Deposit" label.                 |
 | `children`  | `ReactNode`                                     | Custom trigger element (replaces the button).    |

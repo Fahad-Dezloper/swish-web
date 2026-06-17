@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Jost } from "next/font/google";
 import "./globals.css";
-import Providers from "./providers";
 
 // Force dynamic rendering for all pages - required for Privy auth
 export const dynamic = "force-dynamic";
@@ -40,7 +39,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${jost.className} antialiased bg-[#121212] min-h-screen`}>
-        <Providers>{children}</Providers>
+        {/* Privy <Providers> is mounted per-segment (the (app) group + /plug),
+            NOT here — so the bare /playground route renders without Privy (and
+            without its secure-context / HTTPS requirement). */}
+        {children}
       </body>
     </html>
   );

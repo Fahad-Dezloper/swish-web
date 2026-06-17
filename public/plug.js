@@ -3,7 +3,7 @@
  *
  * Drop-in, zero dependencies:
  *
- *   <script src="https://swish.cash/plug.js"></script>
+ *   <script src="https://plug.swish.cash/plug.js"></script>
  *   <script>
  *     Plug.open({
  *       recipient: "merchant.sol",   // Solana address OR Swish @handle
@@ -15,13 +15,13 @@
  *     });
  *   </script>
  *
- * All wallet/protocol logic lives in the hosted iframe (swish.cash/plug);
+ * All wallet/protocol logic lives in the hosted iframe (plug.swish.cash/plug);
  * this file just renders it and relays postMessage events.
  */
 (function () {
   "use strict";
 
-  var DEFAULT_BASE = "https://swish.cash";
+  var DEFAULT_BASE = "https://plug.swish.cash";
 
   var MSG = {
     READY: "swish:plug:ready",

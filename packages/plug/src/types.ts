@@ -25,9 +25,14 @@ export interface PlugProps {
   amount?: number;
   /** Token to send. v1 supports USDC only. */
   token?: "USDC";
-  /** Your order/correlation id — echoed back verbatim in onSuccess. */
+  /**
+   * Optional. Your own order/correlation id (an order number, invoice id,
+   * cart id — whatever you already use). The Plug never reads or stores it;
+   * it's echoed back untouched in onSuccess so you can match the payment to
+   * your order. Omit it entirely if you have no order to track.
+   */
   reference?: string;
-  /** Origin of the hosted Plug. Defaults to https://swish.cash. */
+  /** Origin of the hosted Plug. Defaults to https://plug.swish.cash. */
   baseUrl?: string;
   /** Override the trigger-button text. Defaults to "Deposit Privately". */
   label?: string;

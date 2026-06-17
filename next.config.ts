@@ -56,7 +56,11 @@ const connectSrc = [
 // it's non-custodial (payer signs its own tx), so framing it carries no fund
 // risk. Tighten to a per-integrator allowlist when the Plug graduates from
 // validation.
-const buildCsp = (frameAncestors: string) =>
+// `frameAncestors` controls who may embed THIS route; `embedSrc` controls what
+// THIS route may embed (appended to frame-src/child-src). The playground needs
+// the latter so it can host the Plug iframe (same-origin in prod; cross-origin
+// localhost in dev).
+const buildCsp = (frameAncestors: string, embedSrc = "") =>
   [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://challenges.cloudflare.com",
@@ -67,8 +71,8 @@ const buildCsp = (frameAncestors: string) =>
     "base-uri 'self'",
     "form-action 'self'",
     `frame-ancestors ${frameAncestors}`,
-    "child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
-    "frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com",
+    `child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org ${embedSrc}`.trim(),
+    `frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com ${embedSrc}`.trim(),
     `connect-src ${connectSrc}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",
@@ -76,6 +80,14 @@ const buildCsp = (frameAncestors: string) =>
 
 const csp = buildCsp("'none'");
 const plugCsp = buildCsp("*");
+
+// The playground hosts the Plug iframe. In prod both are served from
+// plug.swish.cash → 'self' covers it; in dev the iframe loads from plain
+// localhost (plug.localhost isn't a Privy-secure context), so allow that too.
+const playgroundCsp = buildCsp(
+  "'none'",
+  `'self'${process.env.NODE_ENV !== "production" ? " http://localhost:3000" : ""}`
+);
 
 // Security headers shared by every route. Framing control (CSP frame-ancestors
 // + X-Frame-Options) is layered on per-rule so /plug can opt out.
@@ -94,10 +106,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Everything EXCEPT the embeddable Plug route/asset gets the strict,
-        // unframeable policy. The negative lookahead excludes /plug and
-        // /plug.js so their dedicated rule below wins without duplicate headers.
-        source: "/((?!plug).*)",
+        // Everything EXCEPT the embeddable Plug route/asset and the playground
+        // gets the strict, unframeable policy. The negative lookahead excludes
+        // /plug, /plug.js, and /playground so their dedicated rules win without
+        // duplicate (and thus intersected) CSP headers.
+        source: "/((?!plug|playground).*)",
         headers: [
           // CSP enforced — Report-Only run was clean (no violations in prod).
           { key: "Content-Security-Policy", value: csp },
@@ -112,6 +125,17 @@ const nextConfig: NextConfig = {
         source: "/plug",
         headers: [
           { key: "Content-Security-Policy", value: plugCsp },
+          ...baseSecurityHeaders,
+        ],
+      },
+      {
+        // The playground itself isn't embeddable (frame-ancestors 'none' +
+        // X-Frame DENY), but it MUST be allowed to host the Plug iframe — so it
+        // gets the relaxed frame-src/child-src (playgroundCsp).
+        source: "/playground",
+        headers: [
+          { key: "Content-Security-Policy", value: playgroundCsp },
+          { key: "X-Frame-Options", value: "DENY" },
           ...baseSecurityHeaders,
         ],
       },
