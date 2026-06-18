@@ -136,10 +136,14 @@
           if (lastHeight > 0) iframe.style.height = lastHeight + "px";
           break;
         case MSG.SUCCESS:
+          // Fire the callback so the host can mark the order paid, but DON'T
+          // close — the iframe shows its own success screen (✓ + tx link) and
+          // the payer dismisses via "Done", which posts CLOSE (handled below).
+          // (If the integration set returnUrl, the iframe redirects the top
+          // window on success, so this modal is left behind regardless.)
           if (typeof opts.onSuccess === "function") {
             opts.onSuccess(data.txSignature, data.reference);
           }
-          cleanup();
           break;
         case MSG.ERROR:
           if (typeof opts.onError === "function") opts.onError(data.message);

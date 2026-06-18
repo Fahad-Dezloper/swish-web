@@ -111,8 +111,11 @@ export function Plug(props: PlugProps) {
           setExpanded(false);
           break;
         case PLUG_MSG.SUCCESS:
+          // Fire the callback but keep the modal open — the iframe shows its own
+          // success screen (✓ + tx link) and the payer dismisses via "Done"
+          // (posts CLOSE, handled below). returnUrl integrations redirect the
+          // top window from inside the iframe, so the modal is moot there.
           handlers.current.onSuccess?.(data.txSignature, data.reference);
-          setOpen(false);
           break;
         case PLUG_MSG.ERROR:
           handlers.current.onError?.(data.message);

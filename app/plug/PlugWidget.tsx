@@ -321,6 +321,12 @@ export function PlugWidget() {
     postToHost({ type: PLUG_MSG.CLOSE });
   }, []);
 
+  // Back to the form with amount/recipient intact; the payer re-taps Deposit.
+  const handleRetry = useCallback(() => {
+    setError(null);
+    setPhase("review");
+  }, []);
+
   // --- render ---
   // The route renders ONLY the card content and fills the iframe. The SDK draws
   // the modal chrome (dim backdrop + centered dialog on desktop / bottom sheet
@@ -360,8 +366,7 @@ export function PlugWidget() {
 
         {(phase === "connect" ||
           phase === "review" ||
-          phase === "processing" ||
-          phase === "error") &&
+          phase === "processing") &&
           config && (
             <div>
               {/* Connected wallet pill (payer's external wallet) */}
@@ -470,10 +475,6 @@ export function PlugWidget() {
                 </div>
               )}
 
-              {error && phase === "error" && (
-                <p className="text-sm text-[#CB0000] text-center mb-3">{error}</p>
-              )}
-
               {phase === "connect" && (
                 <button
                   onClick={handleConnect}
@@ -483,7 +484,7 @@ export function PlugWidget() {
                 </button>
               )}
 
-              {(phase === "review" || phase === "error") && (
+              {phase === "review" && (
                 <button
                   onClick={handlePay}
                   disabled={!canPay}
@@ -520,16 +521,20 @@ export function PlugWidget() {
 
         {phase === "success" && (
           <div className="py-6 text-center space-y-3">
-            <div className="mx-auto w-12 h-12 rounded-full bg-[#008834] text-white flex items-center justify-center text-2xl">
-              ✓
-            </div>
+            <Image
+              src="/assets/success-alt.svg"
+              alt="Success"
+              width={24}
+              height={24}
+              className="mx-auto"
+            />
             <p className="font-semibold text-[#121212]">Deposited privately</p>
             {txSignature && (
               <a
                 href={`https://solscan.io/tx/${txSignature}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs text-[#008834] underline break-all block"
+                className="text-sm text-[#121212]/70 hover:text-[#121212] underline underline-offset-4 decoration-dashed transition-colors"
               >
                 View transaction
               </a>
@@ -539,6 +544,24 @@ export function PlugWidget() {
               className="w-full h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold mt-2 shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
             >
               Done
+            </button>
+          </div>
+        )}
+
+        {phase === "error" && (
+          <div className="py-6 text-center space-y-3">
+            <span className="block text-3xl font-semibold text-[#CB0000] leading-none">
+              !
+            </span>
+            <p className="font-semibold text-[#121212]">Transaction failed</p>
+            <p className="text-sm text-[#121212]/60 break-words">
+              {error || "Something went wrong"}
+            </p>
+            <button
+              onClick={handleRetry}
+              className="w-full h-12 bg-[#121212] rounded-full flex items-center justify-center text-[#fafafa] font-semibold mt-2 shadow-[0_4px_12px_rgba(18,18,18,0.15)]"
+            >
+              Try Again
             </button>
           </div>
         )}
