@@ -240,7 +240,8 @@ export function PlugWidget() {
     "send"
   );
   const total = numAmount - partnerFee;
-  const showBreakdown = numAmount > 0 && receiverValid;
+  const showBreakdown =
+    numAmount > 0 && receiverValid && !!connectedWallet;
 
   const handlePay = useCallback(async () => {
     if (!config || !connectedWallet || !effectiveRecipient) return;
