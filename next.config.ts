@@ -50,22 +50,55 @@ const connectSrc = [
 // required for Next.js inline hydration scripts (no nonce, since we use static
 // headers not middleware) and the app's WASM (privacycash / hasher.rs, Solana
 // crypto). Tighten to a nonce-based policy later via middleware if desired.
-const csp = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://challenges.cloudflare.com",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://auth.privy.io https://explorer-api.walletconnect.com",
-  "font-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
-  "frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com",
-  `connect-src ${connectSrc}`,
-  "worker-src 'self' blob:",
-  "manifest-src 'self'",
-].join("; ");
+//
+// `frameAncestors` is parameterized so the embeddable /plug route can relax it
+// (the rest of the app stays 'none'). For v1 the Plug allows any ancestor —
+// it's non-custodial (payer signs its own tx), so framing it carries no fund
+// risk. Tighten to a per-integrator allowlist when the Plug graduates from
+// validation.
+// `frameAncestors` controls who may embed THIS route; `embedSrc` controls what
+// THIS route may embed (appended to frame-src/child-src). The playground needs
+// the latter so it can host the Plug iframe (same-origin in prod; cross-origin
+// localhost in dev).
+const buildCsp = (frameAncestors: string, embedSrc = "") =>
+  [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://challenges.cloudflare.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://auth.privy.io https://explorer-api.walletconnect.com",
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    `frame-ancestors ${frameAncestors}`,
+    `child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org ${embedSrc}`.trim(),
+    `frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com ${embedSrc}`.trim(),
+    `connect-src ${connectSrc}`,
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+  ].join("; ");
+
+const csp = buildCsp("'none'");
+const plugCsp = buildCsp("*");
+
+// The playground hosts the Plug iframe. In prod both are served from
+// plug.swish.cash → 'self' covers it; in dev the iframe loads from plain
+// localhost (plug.localhost isn't a Privy-secure context), so allow that too.
+const playgroundCsp = buildCsp(
+  "'none'",
+  `'self'${process.env.NODE_ENV !== "production" ? " http://localhost:3000" : ""}`
+);
+
+// Security headers shared by every route. Framing control (CSP frame-ancestors
+// + X-Frame-Options) is layered on per-rule so /plug can opt out.
+const baseSecurityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=31536000; includeSubDomains",
+  },
+];
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -73,18 +106,37 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        // Everything EXCEPT the embeddable Plug route/asset and the playground
+        // gets the strict, unframeable policy. The negative lookahead excludes
+        // /plug, /plug.js, and /playground so their dedicated rules win without
+        // duplicate (and thus intersected) CSP headers.
+        source: "/((?!plug|playground).*)",
         headers: [
           // CSP enforced — Report-Only run was clean (no violations in prod).
           { key: "Content-Security-Policy", value: csp },
-          // Safe to enforce immediately.
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          {
-            key: "Strict-Transport-Security",
-            value: "max-age=31536000; includeSubDomains",
-          },
+          ...baseSecurityHeaders,
+        ],
+      },
+      {
+        // The Plug is meant to be embedded: relax frame-ancestors, drop
+        // X-Frame-Options entirely (it can't express an allowlist), keep the
+        // rest of the hardening.
+        source: "/plug",
+        headers: [
+          { key: "Content-Security-Policy", value: plugCsp },
+          ...baseSecurityHeaders,
+        ],
+      },
+      {
+        // The playground itself isn't embeddable (frame-ancestors 'none' +
+        // X-Frame DENY), but it MUST be allowed to host the Plug iframe — so it
+        // gets the relaxed frame-src/child-src (playgroundCsp).
+        source: "/playground",
+        headers: [
+          { key: "Content-Security-Policy", value: playgroundCsp },
+          { key: "X-Frame-Options", value: "DENY" },
+          ...baseSecurityHeaders,
         ],
       },
     ];
