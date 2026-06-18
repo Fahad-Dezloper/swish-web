@@ -53,7 +53,7 @@ function isValidAddress(addr: string): boolean {
 
 export function PlugWidget() {
   const params = useSearchParams();
-  const { ready, connectWallet, login } = usePrivy();
+  const { ready, connectWallet, login, logout } = usePrivy();
   const { isOpen: privyModalOpen } = useModalStatus();
   const { wallets } = useWallets();
   const { send } = useSendTransaction();
@@ -71,14 +71,13 @@ export function PlugWidget() {
   const [error, setError] = useState<string | null>(null);
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [routedProvider, setRoutedProvider] = useState<ProviderId | null>(null);
-  // Whether the payer explicitly connected in THIS widget session.
-  const [hasConnected, setHasConnected] = useState(false);
 
-  const rawWallet = wallets[0] || null;
-  // Don't treat a wallet restored from a prior Privy session (the iframe shares
-  // swish.cash's session) as connected — require an explicit connect here, so
-  // the payer always picks the wallet they pay from instead of inheriting one.
-  const connectedWallet = hasConnected ? rawWallet : null;
+  // The Plug runs on its own origin (plug.swish.cash) with an isolated session
+  // jar, so wallets[0] is only ever a wallet the payer connected in THIS widget
+  // — never one inherited from a swish.cash login. No explicit-connect gate is
+  // needed (that was the same-origin band-aid, removed once the separate origin
+  // proved the isolation holds).
+  const connectedWallet = wallets[0] || null;
   const { balance: usdcBalance } = useUSDCBalance(connectedWallet?.address ?? null);
 
   // --- 1. Load config: URL params first, postMessage as a fallback/override ---
@@ -168,7 +167,6 @@ export function PlugWidget() {
     phase === "review" && numAmount > 0 && effectiveRecipient.length > 0;
 
   const handleConnect = useCallback(async () => {
-    setHasConnected(true);
     try {
       // Prefer a pure wallet connect; fall back to the login modal if the
       // installed Privy build doesn't expose connectWallet.
@@ -306,20 +304,17 @@ export function PlugWidget() {
   ]);
 
   const handleDisconnect = useCallback(() => {
-    // Best-effort disconnect of the connected wallet. This is CONNECTOR-level
-    // only — it never logs the user out of Privy (logout is a separate action we
-    // deliberately avoid, since the iframe shares swish.cash's session).
-    // Phantom/MetaMask no-op here (no programmatic disconnect); that's fine. We
-    // always forget the wallet locally so the widget returns to the connect
-    // screen regardless.
-    const w = rawWallet;
+    // The Plug runs on its own origin (plug.swish.cash), so a real Privy logout
+    // is safe here — it tears down only the widget's isolated session, never a
+    // swish.cash session in another tab. Logout disconnects the wallet and drops
+    // the widget back to the connect screen. We also best-effort the connector's
+    // own disconnect first (a no-op for Phantom/MetaMask) for a clean handoff.
+    const w = connectedWallet;
     if (w && typeof w.disconnect === "function") {
-      Promise.resolve(w.disconnect()).catch(() => {
-        // ignore — local forget below still returns us to the connect screen
-      });
+      Promise.resolve(w.disconnect()).catch(() => {});
     }
-    setHasConnected(false);
-  }, [rawWallet]);
+    Promise.resolve(logout()).catch(() => {});
+  }, [connectedWallet, logout]);
 
   const handleClose = useCallback(() => {
     postToHost({ type: PLUG_MSG.CLOSE });
