@@ -17,8 +17,9 @@ export const PLUG_MSG = {
 
 export interface PlugProps {
   /**
-   * Destination: a Solana address OR a Swish @handle. Optional — omit it and
-   * the Plug opens as a private-pay form where the payer enters the recipient.
+   * Destination Solana address. Optional — omit it and the Plug opens as a
+   * private-pay form where the payer enters the recipient. (v1 takes a raw
+   * address only; @handle resolution is a planned fast-follow.)
    */
   recipient?: string;
   /** Amount in USDC. If set, the field is locked; omit to let the payer type it. */

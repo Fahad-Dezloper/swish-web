@@ -11,9 +11,9 @@
 /** Config the integrator supplies — passed via URL params or postMessage. */
 export interface PlugConfig {
   /**
-   * Destination: a Solana address OR a Swish @handle (X-handle routing).
-   * If set, the field is locked; if omitted, the payer enters it themselves —
-   * the Plug stays open as a general private-pay form.
+   * Destination Solana address. If set, the field is locked; if omitted, the
+   * payer enters it themselves — the Plug stays open as a general private-pay
+   * form. (v1 takes a raw address only; @handle resolution is a fast-follow.)
    */
   recipient?: string;
   /** Amount in `token` units. If set, the field is locked; if omitted, payer types it. */

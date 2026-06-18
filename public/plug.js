@@ -6,7 +6,7 @@
  *   <script src="https://plug.swish.cash/plug.js"></script>
  *   <script>
  *     Plug.open({
- *       recipient: "merchant.sol",   // Solana address OR Swish @handle
+ *       recipient: "9xQeWvG…",       // Solana address (v1: raw address only)
  *       amount: 25.00,                // optional; omit to let the payer type it
  *       reference: "order_1234",      // your order id — echoed back verbatim
  *       onSuccess: function (txSignature, reference) { markPaid(reference); },
