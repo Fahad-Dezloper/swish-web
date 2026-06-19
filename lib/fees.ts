@@ -25,12 +25,13 @@ export function estimateMbFee(amount: number): FeeEstimate {
   };
 }
 
-export function estimateUmbraFee(amount: number, _flow: FlowKind): FeeEstimate {
-  const fee = amount * 0.007;
-  return {
-    feeUSDC: fee,
-    breakdown: "0.7% on claim",
-  };
+export const UMBRA_FEE_RATE = 0.0035;
+
+export function estimateUmbraFee(amount: number, flow: FlowKind): FeeEstimate {
+  if (flow === "send_claim") {
+    return { feeUSDC: amount * UMBRA_FEE_RATE * 2, breakdown: "0.7%" };
+  }
+  return { feeUSDC: amount * UMBRA_FEE_RATE, breakdown: "0.35%" };
 }
 
 export function estimateFee(

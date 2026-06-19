@@ -1,15 +1,36 @@
 "use client";
 
+/**
+ * Unlock = move user's Umbra-held USDC to their mainnet ATA.
+ *
+ * Flow:
+ *   1. Scan claimable UTXOs and filter via the local tracker (drops
+ *      already-claimed leaves the SDK scanner still returns).
+ *   2. If unclaimed UTXOs exist, claim them via Umbra's relayer
+ *      (gasless).
+ *   3. Poll the encrypted balance until Arcium MPC has credited the
+ *      claimed amount (~10–15s typical, capped at ~30s). Only once the
+ *      credit is confirmed do we mark the UTXOs in the tracker — until
+ *      Arcium's callback fires the UTXO stays claimable on-chain, so
+ *      marking earlier would strand the balance if the callback hangs.
+ *   4. Withdraw the requested amount from encrypted balance to the
+ *      user's mainnet ATA via
+ *      `getEncryptedBalanceToPublicBalanceDirectWithdrawerFunction`.
+ *
+ * Polling avoids the "claim succeeds but encrypted balance not yet
+ * credited" race that caused withdraw-with-amount > available errors.
+ */
+
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
 import {
-  getClaimableUtxoScannerFunction,
-  getEncryptedBalanceQuerierFunction,
-  getEncryptedBalanceToPublicBalanceDirectWithdrawerFunction,
-  getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction,
-  getSelfClaimableUtxoToEncryptedBalanceClaimerFunction,
-} from "@umbra-privacy/sdk";
+  getBurnableStealthPoolNoteScannerFunction,
+  getReceiverBurnableStealthPoolNoteIntoETABurnerFunction,
+  getSelfBurnableStealthPoolNoteIntoETABurnerFunction,
+} from "@umbra-privacy/sdk/burn";
+import { getEncryptedBalanceQuerierFunction } from "@umbra-privacy/sdk/query";
+import { getETAIntoATAWithdrawerFunction } from "@umbra-privacy/sdk/withdrawal";
 
 import {
   getBrowserUmbraClient,
@@ -22,12 +43,18 @@ import {
   filterUnclaimedUtxos,
   markUtxosClaimed,
 } from "@/lib/client/umbraClaimedUtxoTracker";
+import { splitBurnableNotes } from "@/lib/umbraScanBuckets";
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
+// Polling config for Arcium settlement after claim.
 const SETTLE_POLL_INTERVAL_MS = 2_000;
 const SETTLE_POLL_TIMEOUT_MS = 35_000;
 
+// Retry config for the tracker write. At this point the claim has
+// already settled on-chain, so a failed write would otherwise drop the
+// user into a stuck state (scanner keeps re-returning a spent UTXO).
+// A few short retries absorb transient Supabase blips.
 const MARK_RETRY_ATTEMPTS = 3;
 const MARK_RETRY_BASE_MS = 500;
 
@@ -47,6 +74,11 @@ interface UmbraUnlockState {
 }
 
 export interface UmbraUnlockParams {
+  /**
+   * Amount in base units to withdraw to mainnet ATA. If omitted, withdraws
+   * everything available (claimed encrypted balance + any pending UTXOs
+   * after claim).
+   */
   amountBaseUnits?: bigint;
 }
 
@@ -130,26 +162,35 @@ export function useUmbraUnlock() {
       const client = await getBrowserUmbraClient({ signer, rpcUrl });
       const suite = getBrowserUmbraProverSuite();
 
-      const scanner = getClaimableUtxoScannerFunction({ client });
+      // 1. Scan + filter claimable UTXOs via server tracker. v5 scanner is
+      // arg-less (auto-discovers trees + resumes from store).
+      const scanner = getBurnableStealthPoolNoteScannerFunction({ client });
       const [scanResult, claimedIds] = await Promise.all([
-        scanner(BigInt(0) as any, BigInt(0) as any),
+        scanner(),
         fetchClaimedUtxoIds(userAddress),
       ]);
-      const receiverUtxos = filterUnclaimedUtxos(claimedIds, [
-        ...((scanResult as any).received ?? []),
-        ...((scanResult as any).publicReceived ?? []),
-      ]);
-      const selfUtxos = filterUnclaimedUtxos(claimedIds, [
-        ...((scanResult as any).selfBurnable ?? []),
-        ...((scanResult as any).publicSelfBurnable ?? []),
-      ]);
+      // All receiver- + self-claimable notes (eta / ata / networkBalance),
+      // minus already-claimed leaves (server-tracked).
+      const { receiver, self } = splitBurnableNotes(scanResult);
+      const receiverUtxos = filterUnclaimedUtxos(claimedIds, receiver);
+      const selfUtxos = filterUnclaimedUtxos(claimedIds, self);
       const hasPending = receiverUtxos.length > 0 || selfUtxos.length > 0;
 
+      // Pre-claim encrypted balance (so we know what to wait for).
       let preBalance = await readEncryptedBalance(client);
 
+      // 2. Claim if needed.
       if (hasPending) {
         setState({ stage: "claiming", signature: null, error: null });
+        // v5: relayer instance exposes submitClaim/pollClaimStatus/
+        // getRelayerAddress → burner deps want submitBurn/pollBurnStatus/
+        // getRelayerAddress. Burner functions own submit→poll internally.
         const relayer = await getBrowserUmbraRelayer();
+        const relayerDep = {
+          submitBurn: relayer.submitClaim,
+          pollBurnStatus: relayer.pollClaimStatus,
+          getRelayerAddress: relayer.getRelayerAddress,
+        };
 
         let pendingTotal = BigInt(0);
         for (const u of [...receiverUtxos, ...selfUtxos]) {
@@ -158,38 +199,41 @@ export function useUmbraUnlock() {
         }
 
         if (receiverUtxos.length > 0) {
-          const claimReceiver =
-            getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction(
-              { client },
-              {
-                zkProver:
-                  suite.claimReceiverClaimableIntoEncryptedBalance,
-                relayer,
-                fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
-              } as any
-            );
-          await claimReceiver(receiverUtxos as any);
+          const burnReceiver = getReceiverBurnableStealthPoolNoteIntoETABurnerFunction(
+            { client },
+            {
+              zkProver: suite.claimReceiverClaimableIntoEncryptedBalance,
+              fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
+              relayer: relayerDep,
+            }
+          );
+          await burnReceiver(receiverUtxos as any);
         }
         if (selfUtxos.length > 0) {
-          const claimSelf =
-            getSelfClaimableUtxoToEncryptedBalanceClaimerFunction(
-              { client },
-              {
-                zkProver:
-                  suite.claimReceiverClaimableIntoEncryptedBalance as any,
-                relayer,
-                fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
-              } as any
-            );
-          await claimSelf(selfUtxos as any);
+          const burnSelf = getSelfBurnableStealthPoolNoteIntoETABurnerFunction(
+            { client },
+            {
+              zkProver: suite.claimSelfClaimableIntoEncryptedBalance,
+              fetchBatchMerkleProof: (client as any).fetchBatchMerkleProof,
+              relayer: relayerDep,
+            }
+          );
+          await burnSelf(selfUtxos as any);
         }
 
+        // 3. Wait for Arcium MPC to credit the encrypted balance.
         setState({ stage: "settling", signature: null, error: null });
+        // We expect at least pre + (pendingTotal − some-fee). Polling
+        // until balance > preBalance is the safe lower bound.
         const finalBalance = await pollUntilCredited(
           client,
           preBalance + BigInt(1)
         );
 
+        // Hard-gate: only mark UTXOs claimed once Arcium has actually
+        // credited the balance. If the callback never fired the UTXO is
+        // still claimable on-chain — surface a retryable error rather than
+        // marking it claimed and silently stranding the balance.
         if (finalBalance <= preBalance) {
           throw new Error(
             "Claim timed out — encrypted balance was not credited. " +
@@ -205,6 +249,7 @@ export function useUmbraUnlock() {
         }
       }
 
+      // 4. Read final available balance + withdraw.
       setState({ stage: "withdrawing", signature: null, error: null });
       const availableBaseUnits = await readEncryptedBalance(client);
       if (availableBaseUnits === BigInt(0)) {
@@ -220,19 +265,21 @@ export function useUmbraUnlock() {
       if (amountBaseUnits <= BigInt(0)) {
         throw new Error("Amount must be greater than 0");
       }
+      // Clamp to whatever actually settled (Arcium fees may shave a bit).
       const finalAmount =
         amountBaseUnits > availableBaseUnits
           ? availableBaseUnits
           : amountBaseUnits;
 
-      const withdraw =
-        getEncryptedBalanceToPublicBalanceDirectWithdrawerFunction({ client });
-      const sig = await withdraw(
+      // v5: getETAIntoATAWithdrawerFunction (ETA → public ATA); returns a
+      // WithdrawResult whose queueSignature is the on-chain tx.
+      const withdraw = getETAIntoATAWithdrawerFunction({ client });
+      const withdrawResult = await withdraw(
         userAddress as any,
         USDC_MINT as any,
         finalAmount as any
       );
-      const sigStr = sig.toString();
+      const sigStr = withdrawResult.queueSignature.toString();
 
       setState({ stage: "settled", signature: sigStr, error: null });
       return sigStr;
@@ -246,6 +293,7 @@ export function useUmbraUnlock() {
         }
         cur = cur.cause;
       }
+      // eslint-disable-next-line no-console
       console.error("[useUmbraUnlock] error:", err);
       setState({
         stage: "error",

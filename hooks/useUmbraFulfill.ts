@@ -3,15 +3,12 @@
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
-import {
-  getPublicBalanceToReceiverClaimableUtxoCreatorFunction,
-  getUserAccountQuerierFunction,
-} from "@umbra-privacy/sdk";
-import type { ZkProverForReceiverClaimableUtxoFromPublicBalance } from "@umbra-privacy/sdk/interfaces";
+import { getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction } from "@umbra-privacy/sdk/deposit";
+import { getUserAccountQuerierFunction } from "@umbra-privacy/sdk/query";
 
 import {
   getBrowserUmbraClient,
-  getBrowserUmbraProverSuite,
+  getBrowserUmbraAtaDepositProver,
 } from "@/lib/client/umbraClientSDK";
 import { createUmbraSignerFromPrivyWallet } from "@/lib/client/umbraPrivySigner";
 
@@ -103,13 +100,9 @@ export function useUmbraFulfill() {
           detail: "Sign each prompt to fulfill privately (~3 prompts)",
         });
 
-        const suite = getBrowserUmbraProverSuite();
-        const deposit = getPublicBalanceToReceiverClaimableUtxoCreatorFunction(
+        const deposit = getATAIntoReceiverBurnableStealthPoolNoteCreatorFunction(
           { client },
-          {
-            zkProver:
-              suite.utxoReceiverClaimable as unknown as ZkProverForReceiverClaimableUtxoFromPublicBalance,
-          }
+          { zkProver: getBrowserUmbraAtaDepositProver() }
         );
 
         const result = await deposit({
@@ -126,8 +119,9 @@ export function useUmbraFulfill() {
             activityId: params.activityId,
             payerAddress: userAddress,
             createUtxoSignature: result.createUtxoSignature.toString(),
-            createProofAccountSignature: result.createProofAccountSignature.toString(),
-            closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
+            // v5: `populateProofAccountSignature` replaces v4's create/close pair.
+            createProofAccountSignature:
+              result.populateProofAccountSignature.toString(),
           }),
         });
         if (!recordRes.ok) {
@@ -141,9 +135,9 @@ export function useUmbraFulfill() {
         reset({ stage: "settled", detail: null });
         return {
           activityId: params.activityId,
-          createProofAccountSignature: result.createProofAccountSignature.toString(),
+          createProofAccountSignature:
+            result.populateProofAccountSignature.toString(),
           createUtxoSignature: result.createUtxoSignature.toString(),
-          closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
         };
       } catch (err: any) {
         const parts: string[] = [];

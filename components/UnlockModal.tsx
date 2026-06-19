@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { formatNumber } from "@/utils";
+import { UMBRA_FEE_RATE } from "@/lib/fees";
 import {
   useUmbraUnlock,
   type UmbraUnlockStage,
@@ -66,6 +67,11 @@ export function UnlockModal({
   const numAmount = parseFloat(amountStr) || 0;
   const exceedsAvailable = numAmount > availableUSDC;
   const canProceed = numAmount > 0 && !exceedsAvailable;
+
+  // Umbra takes ~0.35% on the unshield/claim leg (the other ~0.35% was already
+  // taken when the note was sent). Rate centralized in lib/fees.ts.
+  const unshieldFee = numAmount * UMBRA_FEE_RATE;
+  const youReceive = numAmount - unshieldFee;
 
   const handleMax = () => {
     setAmountStr(availableUSDC.toString());
@@ -156,11 +162,17 @@ export function UnlockModal({
                 </span>
               </div>
               <div className="flex justify-between">
+                <span className="text-[#717171]">Umbra fee (0.35%)</span>
+                <span className="text-[#717171]">
+                  ~{formatNumber(unshieldFee)} USDC
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-[#121212] font-semibold">
                   You receive
                 </span>
                 <span className="text-[#121212] font-semibold">
-                  {formatNumber(numAmount)} USDC
+                  {formatNumber(youReceive)} USDC
                 </span>
               </div>
             </div>
