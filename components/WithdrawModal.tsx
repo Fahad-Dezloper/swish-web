@@ -20,7 +20,6 @@ interface WithdrawModalProps {
 
 type ModalState = "input" | "loading" | "success" | "error";
 
-// Keep in sync with MIN_WITHDRAW_USDC in app/api/withdraw/route.ts.
 const MIN_WITHDRAW = 0.1;
 
 export function WithdrawModal({
@@ -111,7 +110,6 @@ export function WithdrawModal({
   return (
     <>
       <Modal isOpen={isOpen} onClose={handleClose}>
-        {/* Header */}
         <div className="flex items-center gap-2 mb-6">
           <Image
             src="/assets/send.svg"
@@ -131,7 +129,6 @@ export function WithdrawModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Wallet Address Input */}
               <div className="mb-4">
                 <label className="text-sm text-[#121212]/50 mb-1 block">
                   Destination wallet address
@@ -158,7 +155,6 @@ export function WithdrawModal({
                 </div>
               </div>
 
-              {/* Amount Input */}
               <div className="mb-6">
                 <label className="text-sm text-[#121212]/50 mb-1 block">
                   Amount (USDC)
@@ -193,7 +189,6 @@ export function WithdrawModal({
                 </p>
               </div>
 
-              {/* Summary */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Amount</span>
@@ -207,7 +202,6 @@ export function WithdrawModal({
                 </div>
               </div>
 
-              {/* Proceed Button */}
               <motion.button
                 onClick={handleProceed}
                 disabled={!canProceed}

@@ -10,19 +10,13 @@ interface NumberPadProps {
 
 export function NumberPad({ onNumberPress, onBackspace }: NumberPadProps) {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"];
-  // Which key to briefly highlight (set when a physical key is pressed).
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Latest handlers, so the keydown listener attaches once but always calls
-  // the current callbacks.
   const handlers = useRef({ onNumberPress, onBackspace });
   useEffect(() => {
     handlers.current = { onNumberPress, onBackspace };
   });
 
-  // Desktop physical-keyboard entry. NumberPad is only mounted during the
-  // amount step (no text fields there), so this never hijacks typing in the
-  // recipient/message inputs.
   useEffect(() => {
     const flash = (key: string) => {
       setActiveKey(key);

@@ -20,25 +20,14 @@ import { areAllProvidersDisabled } from "@/lib/providers/maintenance";
 const SC_PROVIDER_POOL: ProviderId[] = ["magicblock-per", "privacy-cash"];
 
 interface SendClaimContentProps {
-  /** Amount entered on the shared keypad in SendModal. */
   amount: string;
   getSignature: GetSessionSignature;
-  /** Return to the Send form (same modal). */
   onBack: () => void;
 }
 
 type ContentState = "input" | "loading" | "success" | "error";
-// Umbra hidden from SC picker for the Frontier demo (Arcium MPC callbacks
-// for `RegisterUserForAnonymousUsageV11` are unreliable, blocking the
-// burner registration step). Backend code stays — re-enable by adding
-// "umbra" back here + restoring the branches below.
 type ProviderChoice = "auto" | "privacy-cash" | "magicblock-per";
 
-/**
- * Claim-link creation, rendered INSIDE SendModal's Modal (no own Modal
- * shell) — the "Generate a claim link" button flips SendModal into this
- * mode, reusing the amount already on the keypad.
- */
 export function SendClaimContent({
   amount,
   getSignature,
@@ -53,19 +42,11 @@ export function SendClaimContent({
   const [provider, setProvider] = useState<ProviderChoice>("auto");
   const [pickerOpen, setPickerOpen] = useState(false);
   const { sendClaim } = useSendClaimTransaction();
-  // Each protocol's SC reclaim uses its own session message — the burner
-  // privkey is encrypted with the sender's protocol-specific signature so
-  // we must mint the right one when the user picks MB. PC's getSignature
-  // is the parent prop fallback for "auto" and "privacy-cash".
   const { getSignature: getMbSessionSignature, walletAddress: senderAddress } =
     useSessionSignature("magicblock-per");
 
   const numAmount = parseFloat(amount) || 0;
 
-  // Resolve Auto for SC. No receiver at sender time (recipient comes from
-  // the claim link), so this only depends on MB /health. Umbra is never
-  // an Auto target for SC — it stays picker-only (sender Umbra reg is
-  // opt-in; Auto can't silently force it).
   const noAutoTarget = areAllProvidersDisabled(SC_PROVIDER_POOL);
   const { resolved: autoResolved, unavailable: autoUnavailable } = useAutoRoute({
     enabled: provider === "auto" && !!senderAddress,
@@ -74,17 +55,10 @@ export function SendClaimContent({
     receiverAddress: null,
   });
 
-  // When picker = Auto, prefer the resolved provider for fee display +
-  // session-sig minting; if not resolved yet, fall back to "auto"
-  // (useProtocolFee treats this as PC worst-case).
   const effectiveProvider: ProviderChoice = (
     provider === "auto" ? (autoResolved ?? "auto") : provider
   ) as ProviderChoice;
 
-  // Per-protocol fee. SC has different fee structure than direct send:
-  //   PC: base + 0.35% (deducted from claim)
-  //   MB: gas only
-  //   Umbra: 0.7% on claim (protocol + relayer)
   const { feeUSDC: partnerFee, breakdown: feeBreakdown } = useProtocolFee(
     effectiveProvider,
     numAmount,
@@ -93,18 +67,11 @@ export function SendClaimContent({
   const total = numAmount - partnerFee;
 
   const handleProceed = async () => {
-    // Resolve the dispatch provider. If the user picked Auto and
-    // useAutoRoute hasn't returned yet (rare — auth + senderAddress
-    // happen before the modal opens in practice), fall back to PC so
-    // the user can proceed.
     const dispatchProvider: ProviderId =
       provider === "auto"
         ? (autoResolved ?? "privacy-cash")
         : (provider as ProviderId);
 
-    // Pick the session-sig hook matching the dispatch provider. The
-    // server validates the sig against `getSessionMessageForProvider`,
-    // so picking the wrong hook here = 401.
     const sessionForProvider = (id: ProviderId) =>
       id === "magicblock-per" ? getMbSessionSignature() : getSignature();
 
@@ -119,9 +86,6 @@ export function SendClaimContent({
     setErrorMessage(null);
 
     try {
-      // No silent fallback: if the resolved provider fails, surface the
-      // error and let the user retry. Auto-switching protocols changes the
-      // fee the user agreed to without consent.
       const result = await sendClaim({
         amount: numAmount,
         token: "USDC",
@@ -160,7 +124,6 @@ export function SendClaimContent({
 
   return (
     <>
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Image
           src="/assets/send.svg"
@@ -180,7 +143,6 @@ export function SendClaimContent({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Back to the send form (claim link is a branch off it) */}
             <button
               onClick={onBack}
               className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
@@ -195,7 +157,6 @@ export function SendClaimContent({
               Back to send
             </button>
 
-            {/* Message Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-2 block">
                 Add message (optional)
@@ -219,7 +180,6 @@ export function SendClaimContent({
               </div>
             </div>
 
-            {/* Amount Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -275,7 +235,6 @@ export function SendClaimContent({
               </div>
             </div>
 
-            {/* Proceed Button */}
             <motion.button
               onClick={handleProceed}
               disabled={
@@ -310,7 +269,6 @@ export function SendClaimContent({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Success Details */}
             <div className="space-y-3 mb-6">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -334,7 +292,6 @@ export function SendClaimContent({
               </div>
             </div>
 
-            {/* Copy Link Button */}
             <motion.button
               onClick={copied ? undefined : handleCopyLink}
               whileTap={copied ? {} : { scale: 0.98 }}

@@ -16,7 +16,6 @@ export default async function Image({
 }) {
   const { id } = await params;
 
-  // Fetch Jost font
   const fontData = await fetch(
     "https://fonts.googleapis.com/css2?family=Jost:wght@300;400&display=swap",
     { headers: { "User-Agent": "Mozilla/5.0" } }
@@ -34,7 +33,6 @@ export default async function Image({
   let message = "";
 
   try {
-    // Query Supabase directly — avoids circular self-fetch that fails on serverless/Telegram
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (supabaseUrl && supabaseKey) {

@@ -21,16 +21,12 @@ interface ReceiveModalProps {
 }
 
 type ModalState = "input" | "loading" | "success" | "error";
-// Within "input", the user enters an amount first, then the message.
 type EntryStep = "amount" | "form";
 
 export function ReceiveModal({
   isOpen,
   onClose,
 }: ReceiveModalProps) {
-  // Request creation is protocol-agnostic — sign with the Swish-scoped
-  // request session sig instead of any protocol's text. The parent prop
-  // `getSignature` (PC by default) is ignored here.
   const { getSignature } = useSessionSignature("request");
   const [amount, setAmount] = useState("0");
   const [entryStep, setEntryStep] = useState<EntryStep>("amount");
@@ -43,7 +39,6 @@ export function ReceiveModal({
   const hasValidAmount = numAmount > 0;
 
   const handleNumberPress = (num: string) => {
-    // USDC for now; pass the selected asset's symbol once it's selectable.
     setAmount((prev) => appendAmountKey(prev, num, decimalsForAsset("USDC")));
   };
 
@@ -54,9 +49,7 @@ export function ReceiveModal({
       setAmount(amount.slice(0, -1));
     }
   };
-  // Requester doesn't pick a protocol — the payer picks at fulfill time.
-  // Show worst-case fee (PC, the auto-router default). Other protocols
-  // may charge less (MB ~0, Umbra 0).
+
   const { feeUSDC: partnerFee, breakdown: feeBreakdown } = useProtocolFee(
     "auto",
     numAmount,
@@ -133,7 +126,6 @@ export function ReceiveModal({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Image src="/assets/receive.svg" alt="Request" width={24} height={24} className="invert" />
         <h2 className="text-2xl font-semibold text-[#121212]">Request</h2>
@@ -147,7 +139,6 @@ export function ReceiveModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Amount entry */}
             <div className="mb-6">
               <AmountField amount={amount} assetSymbol="USDC" />
             </div>
@@ -177,7 +168,6 @@ export function ReceiveModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Back to amount entry */}
             <button
               onClick={() => setEntryStep("amount")}
               className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
@@ -192,7 +182,6 @@ export function ReceiveModal({
               Edit amount
             </button>
 
-            {/* Message Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-2 block">
                 Add message (optional)
@@ -214,7 +203,6 @@ export function ReceiveModal({
               </div>
             </div>
 
-            {/* Amount Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -230,7 +218,6 @@ export function ReceiveModal({
               </div>
             </div>
 
-            {/* Proceed Button */}
             <motion.button
               onClick={handleProceed}
               whileTap={{ scale: 0.98 }}
@@ -261,7 +248,6 @@ export function ReceiveModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Success Details */}
             <div className="space-y-3 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -277,7 +263,6 @@ export function ReceiveModal({
               </div>
             </div>
 
-            {/* Copy Link Button */}
             <motion.button
               onClick={copied ? undefined : handleCopyLink}
               whileTap={copied ? {} : { scale: 0.98 }}

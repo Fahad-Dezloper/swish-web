@@ -18,6 +18,7 @@ import { useUmbraSend } from "@/hooks/useUmbraSend";
 import { useUmbraStatus } from "@/hooks/useUmbraStatus";
 import { useProtocolFee } from "@/hooks/useProtocolFee";
 import { useAutoRoute } from "@/hooks/useAutoRoute";
+import { useSOLBalance } from "@/hooks/useSOLBalance";
 import {
   useSessionSignature,
   type GetSessionSignature,
@@ -27,6 +28,8 @@ import {
   areAllProvidersDisabled,
   isProviderDisabled,
 } from "@/lib/providers/maintenance";
+
+const SOL_DUST_THRESHOLD = 5_000;
 
 const SEND_PROVIDER_POOL: ProviderId[] = [
   "umbra",
@@ -42,10 +45,7 @@ interface SendModalProps {
 }
 
 type ModalState = "input" | "loading" | "success" | "error";
-// Within the "input" state, the user first enters an amount, then fills
-// in the recipient + routing details.
 type EntryStep = "amount" | "form";
-// A direct send, or generating a claim link — both share the keypad.
 type SendMode = "send" | "claim";
 type RecipientType = "wallet" | "x";
 type ProviderChoice = "auto" | "privacy-cash" | "magicblock-per" | "umbra";
@@ -75,21 +75,20 @@ export function SendModal({
   const { send } = useSendTransaction();
   const { send: umbraSend, state: umbraSendState } = useUmbraSend();
   const { status: umbraStatus } = useUmbraStatus();
-  // Mint MB session sig — when user picks MB (or Auto resolves to MB),
-  // server expects MB-signed sig (per `getSessionMessageForProvider`).
-  // walletAddress here is the SENDER (current user) — same regardless of
-  // session-context arg.
   const {
     getSignature: getMbSessionSignature,
     walletAddress: senderAddress,
   } = useSessionSignature("magicblock-per");
+
+  const { balance: solBalance } = useSOLBalance(senderAddress);
+  const insufficientSol =
+    solBalance !== null && solBalance * 1e9 < SOL_DUST_THRESHOLD;
 
   const numAmount = parseFloat(amount) || 0;
   const hasValidAmount = numAmount > 0;
   const exceedsBalance = balance !== null && numAmount > balance;
 
   const handleNumberPress = (num: string) => {
-    // USDC for now; pass the selected asset's symbol once it's selectable.
     setAmount((prev) => appendAmountKey(prev, num, decimalsForAsset("USDC")));
   };
 
@@ -113,15 +112,9 @@ export function SendModal({
 
   const isValidXHandle = useMemo(() => {
     if (!xHandle) return false;
-    // Basic X handle validation: alphanumeric and underscores, 1-15 chars
     return /^[a-zA-Z0-9_]{1,15}$/.test(xHandle);
   }, [xHandle]);
 
-  // Resolve Auto pre-proceed for both wallet and X modes. For X mode we
-  // wait until the check-x debounce has produced a final status before
-  // firing — `resolvedXAddress` is null until the handle is found, and
-  // for Case 3 (brand-new X user) it stays null forever. The server's
-  // preview handles null receiver gracefully (falls through to MB/PC).
   const xResolveSettled =
     recipientUmbraStatus !== "idle" && recipientUmbraStatus !== "checking";
   const noAutoTarget = areAllProvidersDisabled(SEND_PROVIDER_POOL);
@@ -140,9 +133,6 @@ export function SendModal({
           : null,
   });
 
-  // Effective provider for dispatch + fee display. When picker is Auto
-  // and we've resolved, use the resolved one; otherwise fall back to
-  // "auto" (which the fee hook treats as PC worst-case).
   const effectiveProvider: ProviderId | "auto" =
     provider === "auto" ? (autoResolved ?? "auto") : provider;
 
@@ -156,10 +146,6 @@ export function SendModal({
   const canProceed =
     recipientType === "wallet" ? isValidAddress : isValidXHandle;
 
-  // Debounced recipient registration check. Wallet mode hits
-  // /api/umbra/status (on-chain only). X mode hits /api/user/check-x
-  // (DB lookup + on-chain) which also resolves the wallet address —
-  // stored in resolvedXAddress for useAutoRoute.
   useEffect(() => {
     const validWallet = recipientType === "wallet" && isValidAddress;
     const validX = recipientType === "x" && isValidXHandle;
@@ -214,12 +200,6 @@ export function SendModal({
     };
   }, [walletAddress, xHandle, recipientType, isValidAddress, isValidXHandle]);
 
-  // If the user is currently on Umbra and the recipient turns out to be
-  // unregistered, we DO NOT silently switch them — that would route the
-  // send through PC and surprise the user with a PC sig prompt. Instead
-  // we block proceed (see canProceedFinal below) and show a clear hint.
-  // The user must manually pick a different protocol. Applies in both
-  // wallet and X modes (X mode resolves recipientUmbraStatus via check-x).
   const umbraBlockedByRecipient =
     provider === "umbra" && recipientUmbraStatus === "unregistered";
 
@@ -255,7 +235,6 @@ export function SendModal({
     try {
       let receiverAddress = walletAddress;
 
-      // If X mode, resolve handle to wallet address first
       if (recipientType === "x") {
         const resolved = await resolveXHandle();
         if (!resolved) {
@@ -265,9 +244,6 @@ export function SendModal({
         setWalletAddress(resolved);
       }
 
-      // For Auto + X-handle, the recipient just resolved — call the
-      // router preview now that we know the receiver. For Auto + wallet
-      // mode, autoResolved is already populated by useAutoRoute.
       let dispatchProvider: ProviderId | "auto" = effectiveProvider;
       if (provider === "auto" && dispatchProvider === "auto") {
         const previewRes = await fetch(
@@ -281,20 +257,13 @@ export function SendModal({
         dispatchProvider = previewJson.providerId;
       }
 
-      // Umbra direct Send runs the SDK client-side (3 prompts: consent + 2 deposit txs).
-      // PC and MB go through the server-prepare/submit flow with their
-      // own session messages.
       if (dispatchProvider === "umbra") {
-        // Floor, never round up: rounding the 7th decimal up would ask
-        // for one more micro-USDC than the user holds and fail the send.
         const baseUnits = BigInt(Math.floor(numAmount * 1_000_000));
         await umbraSend({
           receiverAddress,
           amountBaseUnits: baseUnits,
         });
       } else {
-        // Pick the right session-sig hook for the resolved protocol.
-        // PC uses the parent's PC sig (the default).
         const session =
           dispatchProvider === "magicblock-per"
             ? await getMbSessionSignature()
@@ -302,18 +271,12 @@ export function SendModal({
         if (!session) {
           throw new Error("Signature required to continue");
         }
-        // No silent fallback: if the resolved provider fails, surface the
-        // error and let the user retry. Auto-switching to another protocol
-        // changes the fee the user agreed to without consent.
         await send({
           receiverAddress,
           amount: numAmount,
           token: "USDC",
           signature: session.signature,
           senderPublicKey: session.address,
-          // Pass the *resolved* providerId so the server validates
-          // against the matching session message and dispatches to the
-          // right provider — even when the user picked Auto.
           providerId: dispatchProvider,
         });
       }
@@ -362,7 +325,6 @@ export function SendModal({
     <>
       <Modal isOpen={isOpen} onClose={handleClose}>
         {mode === "claim" ? (
-          // Claim-link creation lives in this same modal, reusing `amount`.
           <SendClaimContent
             amount={amount}
             getSignature={getSignature}
@@ -370,7 +332,6 @@ export function SendModal({
           />
         ) : (
         <>
-        {/* Header */}
         <div className="flex items-center gap-2 mb-6">
           <Image
             src="/assets/send.svg"
@@ -390,7 +351,6 @@ export function SendModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Amount entry */}
               <div className="mb-3">
                 <AmountField
                   amount={amount}
@@ -439,7 +399,6 @@ export function SendModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Back to amount entry */}
               <button
                 onClick={() => setEntryStep("amount")}
                 className="flex items-center gap-1.5 mb-4 text-sm text-[#121212]/50 hover:text-[#121212] transition-colors"
@@ -454,7 +413,6 @@ export function SendModal({
                 Edit amount
               </button>
 
-              {/* Recipient Type Toggle */}
               <div className="flex mb-4 bg-[#121212]/5 rounded-full p-1">
                 <button
                   onClick={() => setRecipientType("wallet")}
@@ -492,7 +450,6 @@ export function SendModal({
                 </button>
               </div>
 
-              {/* Recipient Input */}
               <div className="mb-6">
                 {recipientType === "wallet" ? (
                   <>
@@ -538,7 +495,6 @@ export function SendModal({
                 )}
               </div>
 
-              {/* Amount Details */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Amount</span>
@@ -548,8 +504,6 @@ export function SendModal({
                 </div>
                 {((recipientType === "wallet" && isValidAddress) ||
                   (recipientType === "x" && isValidXHandle)) &&
-                  // Hide the row entirely while auto is still resolving;
-                  // show once a protocol is known (auto-resolved or manual)
                   (provider !== "auto" || autoResolved) && (
                   <>
                     <div className="flex justify-between items-center">
@@ -619,15 +573,20 @@ export function SendModal({
                 </div>
               </div>
 
-              {/* Proceed Button */}
+              {insufficientSol && (
+                <p className="text-[#CB0000] text-sm mb-3">
+                  Not enough SOL for gas fees. Add SOL to your wallet to
+                  proceed.
+                </p>
+              )}
+
               <motion.button
                 onClick={handleProceed}
                 disabled={
                   !canProceed ||
                   isResolvingX ||
                   umbraBlockedByRecipient ||
-                  // Block until a protocol is actually chosen (auto-resolved
-                  // counts). Covers loading + router failure cases.
+                  insufficientSol ||
                   (provider === "auto" &&
                     (noAutoTarget || autoUnavailable || !autoResolved))
                 }
@@ -637,8 +596,6 @@ export function SendModal({
                 {isResolvingX ? "Resolving..." : "Proceed"}
               </motion.button>
 
-              {/* Generate Claim Link - continues in this same modal (claim
-                  mode); invisible for X sends */}
               <button
                 onClick={() => setMode("claim")}
                 disabled={recipientType === "x"}
@@ -684,7 +641,6 @@ export function SendModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Success Details */}
               <div className="space-y-2 mb-8">
                 <div className="flex justify-between">
                   <span className="text-[#121212]">Sent To</span>
@@ -712,7 +668,6 @@ export function SendModal({
                 </div>
               </div>
 
-              {/* Success Button */}
               <motion.button
                 onClick={handleClose}
                 whileTap={{ scale: 0.98 }}
@@ -776,7 +731,6 @@ export function SendModal({
         )}
       </Modal>
 
-      {/* QR Scanner Modal */}
       {showQRScanner && (
         <QRScanner
           isOpen={showQRScanner}

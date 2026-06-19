@@ -30,7 +30,6 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
         try {
           await scannerRef.current.stop();
         } catch {
-          // already stopped
         }
       }
       scannerRef.current = null;
@@ -50,7 +49,6 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
           (decodedText) => {
             if (!mounted) return;
 
-            // Strip solana: prefix if present
             const text = decodedText.replace(/^solana:/, "");
 
             try {
@@ -63,7 +61,7 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
               setTimeout(() => setError(null), 2000);
             }
           },
-          () => {} // ignore scan failures (no QR detected yet)
+          () => {}
         );
         runningRef.current = true;
       } catch (err: any) {
@@ -73,7 +71,6 @@ export function QRScanner({ isOpen, onClose, onScan }: QRScannerProps) {
       }
     };
 
-    // Small delay to ensure DOM element exists
     const timeout = setTimeout(startScanner, 100);
 
     return () => {

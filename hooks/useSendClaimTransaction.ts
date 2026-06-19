@@ -64,7 +64,6 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
       setIsLoading(true);
       setError(null);
 
-      // Helper to cancel activity on failure
       const cancelActivity = async (activityId: string) => {
         try {
           await fetch("/api/activity/cancel", {
@@ -86,7 +85,6 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
       let activityId: string | null = null;
 
       try {
-        // Step 1: Call /api/send_claim/prepare
         const prepareRes = await fetch("/api/send_claim/prepare", {
           method: "POST",
           headers: {
@@ -113,30 +111,25 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
         const prepareResult: PrepareResponse = await prepareRes.json();
         activityId = prepareResult.activityId;
 
-        // Store passphrase immediately (we'll need it for the result)
         const passphrase = prepareResult.passphrase;
 
-        // Step 2: Decode unsigned deposit transaction from base64 to bytes
         const depositTxBytes = Uint8Array.from(
           atob(prepareResult.unsignedDepositTx),
           (c) => c.charCodeAt(0)
         );
 
-        // Step 3: Sign deposit transaction using wallet (user pays their own gas)
         let signedDepositResult;
         try {
           signedDepositResult = await solanaWallet.signTransaction({
             transaction: depositTxBytes,
           });
         } catch (signError: any) {
-          // User rejected or signing failed - cancel the activity
           if (activityId) {
             await cancelActivity(activityId);
           }
           throw new Error(signError.message || "Transaction signing rejected");
         }
 
-        // Convert signed transaction to base64
         const signedDepositTx = btoa(
           String.fromCharCode.apply(
             null,
@@ -144,7 +137,6 @@ export function useSendClaimTransaction(): UseSendClaimTransactionResult {
           )
         );
 
-        // Step 4: Call /api/send_claim/submit
         const submitRes = await fetch("/api/send_claim/submit", {
           method: "POST",
           headers: {

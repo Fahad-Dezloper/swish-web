@@ -5,7 +5,6 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 
-// Create connectors once on client side only
 const solanaConnectors =
   typeof window !== "undefined"
     ? toSolanaWalletConnectors({ shouldAutoConnect: true })
@@ -18,8 +17,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  // Don't render anything until mounted on client
-  // This prevents hooks from being called without PrivyProvider context
   if (!mounted) {
     return null;
   }
@@ -71,6 +68,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           },
         },
         solana: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           rpcs: {
             "solana:mainnet": {
               rpc: createSolanaRpc(process.env.NEXT_PUBLIC_RPC_URL || "https://api.mainnet-beta.solana.com"),
@@ -79,7 +77,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                   .replace("https://", "wss://")
               ),
             },
-          },
+          } as any,
         },
       }}
     >

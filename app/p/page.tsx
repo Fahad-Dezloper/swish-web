@@ -42,8 +42,6 @@ export default function ProfilePage() {
     refetch: refetchSOLBalance,
   } = useSOLBalance(walletAddress);
 
-  // Pull both balances now — shared cache means this updates the profile
-  // rows AND the home account chip at once.
   const refreshBalances = () => {
     refetchUSDCBalance();
     refetchSOLBalance();
@@ -69,8 +67,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabType>(
     searchParams.get("tab") === "activity" ? "activity" : "wallet"
   );
-  // Keep the URL in sync so a refresh restores the tab you're actually on
-  // (replaceState avoids a re-render/refetch).
+
   const selectTab = (tab: TabType) => {
     setActiveTab(tab);
     window.history.replaceState(null, "", `/p?tab=${tab}`);
@@ -100,7 +97,6 @@ export default function ProfilePage() {
     try {
       await registerUmbra();
     } catch {
-      // hook surfaces error in state
     } finally {
       refetchUmbraStatus();
     }
@@ -115,7 +111,6 @@ export default function ProfilePage() {
     setShowUnlock(true);
   };
 
-  // Not connected state
   if (!authenticated) {
     return (
       <main className="flex flex-col items-center justify-center p-4 w-full min-h-[60vh]">
@@ -130,7 +125,6 @@ export default function ProfilePage() {
     );
   }
 
-  // Loading state
   if (isLoading && allActivities.length === 0 && !stats) {
     return (
       <main className="flex flex-col items-center justify-center p-4 w-full min-h-[60vh]">
@@ -140,9 +134,6 @@ export default function ProfilePage() {
     );
   }
 
-  // Total = mainnet USDC + SOL (in USD) + Umbra shielded total (encrypted
-  // + filtered claimable, computed in useUmbraBalance). Shielded only
-  // contributes once the user has clicked Reveal.
   const totalUSD =
     (usdcBalance || 0) +
     (solBalanceUSD || 0) +
@@ -152,7 +143,6 @@ export default function ProfilePage() {
   return (
     <>
       <main className="flex flex-col items-center p-4 w-full h-[stretch]">
-        {/* Header: Address + X handle */}
         <div className="w-full max-w-[320px] mb-6">
           <div className="flex items-center justify-between gap-2 w-full">
             <span className="text-[#121212] font-medium text-lg">
@@ -200,7 +190,6 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Tab Toggle */}
         <div className="w-full max-w-[320px] flex mb-6 bg-[#121212]/5 rounded-full p-1">
           <button
             onClick={() => selectTab("wallet")}
@@ -233,7 +222,6 @@ export default function ProfilePage() {
               exit={{ opacity: 0 }}
               className="w-full max-w-[320px]"
             >
-              {/* Total Balance */}
               <div className="text-center mb-6">
                 <p className="text-[#121212]/50 text-sm mb-1">Total Balance</p>
                 <p className="text-4xl font-semibold">
@@ -248,7 +236,6 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              {/* Token Rows */}
               <div className="space-y-3 mb-6">
                 <AssetRow
                   icon="/assets/usdc-icon.svg"
@@ -272,7 +259,6 @@ export default function ProfilePage() {
                 />
               </div>
 
-              {/* Umbra section */}
               <div className="mb-6 border-t border-[#121212]/10 pt-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -321,7 +307,6 @@ export default function ProfilePage() {
                   </p>
                 )}
 
-                {/* Shielded balance + Reveal/Unlock (registered only) */}
                 {isUmbraRegistered && (
                   <div className="mt-3">
                     <div className="flex items-center justify-between gap-3">
@@ -384,7 +369,6 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {/* Stats */}
               <div className="space-y-2 mb-6 border-t border-[#121212]/10 pt-4">
                 <div className="flex justify-between">
                   <span className="text-[#121212] text-sm font-medium">
@@ -432,7 +416,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-3">
                 <motion.button
                   onClick={() => setShowAddFunds(true)}
@@ -489,7 +472,6 @@ export default function ProfilePage() {
         </AnimatePresence>
       </main>
 
-      {/* Add Funds Modal */}
       {showAddFunds && walletAddress && (
         <AddFundsModal
           isOpen={showAddFunds}
@@ -501,7 +483,6 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* Withdraw Modal */}
       {showWithdraw && walletAddress && (
         <WithdrawModal
           isOpen={showWithdraw}
@@ -514,9 +495,6 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* Unlock Modal — Umbra shielded → mainnet ATA. Modal shows the
-          combined balance (encrypted + filtered claimable); the unlock
-          flow does claim+settle+withdraw if there's anything to claim. */}
       {showUnlock && (
         <UnlockModal
           isOpen={showUnlock}

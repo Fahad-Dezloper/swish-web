@@ -37,17 +37,11 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
   const { login, authenticated, ready } = usePrivy();
   const [claimData, setClaimData] = useState<ClaimData | null>(null);
 
-  // Pick the session-sig hook variant matching the row's provider so the
-  // wallet popup shows the protocol-matching message text. Defaults to PC
-  // until claim data loads.
   const reclaimProvider: ProviderId =
     claimData?.providerId && isProviderId(claimData.providerId)
       ? (claimData.providerId as ProviderId)
       : DEFAULT_PROVIDER_ID;
   const { walletAddress, getSignature } = useSessionSignature(reclaimProvider);
-  // Fee shown reflects the row's actual protocol — PC has its dynamic base
-  // + 0.35%, MB charges only gas, Umbra is 0.7% on claim. Hook is called
-  // unconditionally (claimData=null → amount=0, value isn't rendered yet).
   const { feeUSDC: partnerFee } = useProtocolFee(
     reclaimProvider,
     claimData?.amount ?? 0,
@@ -58,11 +52,7 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Wait for Privy to finish hydrating before any fetch — otherwise an
-    // unauthenticated-looking first render fires a no-wallet fetch that
-    // can race-overwrite the correct one when wallet eventually loads.
     if (!ready) return;
-    // Then, if authenticated, wait for walletAddress so isSender is reliable.
     if (authenticated && !walletAddress) return;
 
     async function fetchClaimData() {
@@ -245,7 +235,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
   return (
     <>
       <main className="flex flex-col items-center p-4 w-full">
-        {/* Amount Display */}
         <div className="flex flex-col items-center mb-6 w-full max-w-full">
           <div className="w-full max-w-[320px] overflow-x-auto scrollbar-hide">
             <p className="text-6xl font-light text-[#121212] text-center">
@@ -263,7 +252,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
           <AccountChip compact />
         </div>
 
-        {/* Details */}
         <div className="w-full max-w-[320px] space-y-2 mb-8">
           {senderProviderId && (
             <div className="flex justify-between">
@@ -285,7 +273,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </div>
 
-        {/* Claim Button (for receivers) */}
         {pageState === "ready" && (!authenticated || !claimData?.isSender) && (
           <motion.button
             onClick={handleClaim}
@@ -296,7 +283,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
           </motion.button>
         )}
 
-        {/* Reclaim Button (for sender only) */}
         {pageState === "ready" && authenticated && claimData?.isSender && (
           <motion.button
             onClick={handleReclaim}
@@ -307,7 +293,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
           </motion.button>
         )}
 
-        {/* Success State */}
         {pageState === "success" && (
           <motion.button
             initial={{ scale: 0.9, opacity: 0 }}
@@ -319,7 +304,6 @@ export default function ClaimPage({ params }: { params: Promise<{ id: string }> 
         )}
       </main>
 
-      {/* Passphrase Modal */}
       {showPassphraseModal && claimData && walletAddress && (
         <ClaimPassphraseModal
           isOpen={showPassphraseModal}

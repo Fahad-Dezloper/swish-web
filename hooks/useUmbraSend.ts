@@ -1,17 +1,5 @@
 "use client";
 
-/**
- * Client-side Umbra direct Send hook.
- *
- * Runs the Umbra SDK in the browser using the user's Privy embedded
- * wallet (or any wallet-standard wallet) as the IUmbraSigner. The user
- * signs each tx the SDK builds — typically 1 master-seed-consent
- * signMessage + 2 deposit signTransactions = 3 wallet prompts.
- *
- * For why we run client-side instead of server-side burner pattern,
- * see [Umbra pivot](memory/project_umbra_pivot_to_client_side.md).
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
@@ -40,12 +28,12 @@ export type UmbraSendStage =
 
 export interface UmbraSendParams {
   receiverAddress: string;
-  amountBaseUnits: bigint; // e.g. 0.1 USDC = 100000n
+  amountBaseUnits: bigint;
   message?: string;
 }
 
 export interface UmbraSendResult {
-  activityId: string | null; // null if record-side persistence fails (rare; deposit already settled on-chain)
+  activityId: string | null;
   createProofAccountSignature: string;
   createUtxoSignature: string;
   closeProofAccountSignature?: string;
@@ -74,8 +62,6 @@ export function useUmbraSend() {
       reset({ stage: "constructing-client", error: null, detail: null });
 
       try {
-        // Pick the user's first connected wallet's address as anchor,
-        // then find the matching wallet-standard wallet.
         const userAddress = connectedWallets[0]?.address;
         if (!userAddress) throw new Error("No wallet connected");
 
@@ -92,10 +78,6 @@ export function useUmbraSend() {
           throw new Error("Could not find wallet-standard account");
         }
 
-        // Use our custom Privy adapter (not the SDK's
-        // createSignerFromWalletAccount) — see umbraPrivySigner.ts for
-        // why: SDK's adapter mishandles the case where the wallet
-        // modifies the tx during signing.
         const signer = createUmbraSignerFromPrivyWallet(
           stdWallet,
           stdAccount
@@ -106,12 +88,6 @@ export function useUmbraSend() {
 
         const client = await getBrowserUmbraClient({ signer, rpcUrl });
 
-        // Stage: pre-flight check that recipient is FULLY registered on
-        // Umbra (PDA exists + x25519 pubkey set + commitment set). Half-
-        // registered recipients would pass `state === "exists"` but the
-        // on-chain deposit would fail because the circuit verifies the
-        // recipient's commitment. Match the server-side check in
-        // isAddressRegisteredOnUmbra.
         reset({ stage: "checking-recipient", detail: params.receiverAddress });
         const query = getUserAccountQuerierFunction({ client });
         const recipientState = await query(params.receiverAddress as any);
@@ -125,9 +101,6 @@ export function useUmbraSend() {
           );
         }
 
-        // Stage: deposit. The SDK will trigger 1 consent (signMessage)
-        // then 2 deposit txs (signTransaction) via the Privy wallet
-        // adapter. User sees 3 wallet prompts.
         reset({
           stage: "depositing",
           detail: "Sign each prompt to complete the private send (~3 prompts)",
@@ -148,8 +121,6 @@ export function useUmbraSend() {
           mint: USDC_MINT as any,
         });
 
-        // Stage: record on Swish backend (thin endpoint that just
-        // creates the activity row). No funds at stake here.
         reset({ stage: "recording", detail: null });
         let activityId: string | null = null;
         try {
@@ -171,8 +142,6 @@ export function useUmbraSend() {
             activityId = json.activityId;
           } else {
             const json = await recordRes.json().catch(() => ({}));
-            // Don't fail the whole send if recording fails — deposit
-            // already landed on-chain. Log + continue.
             console.warn(
               "Activity recording failed (deposit already settled):",
               json
@@ -193,8 +162,6 @@ export function useUmbraSend() {
           closeProofAccountSignature: result.closeProofAccountSignature?.toString(),
         };
       } catch (err: any) {
-        // Solana errors nest the simulation logs in cause.context.logs.
-        // Walk the cause chain to surface them in the UI for debugging.
         const parts: string[] = [];
         let current = err;
         while (current) {
@@ -213,14 +180,11 @@ export function useUmbraSend() {
                   )
               );
             } catch {
-              // ignore unstringifiable
             }
           }
           current = current.cause;
         }
         const msg = parts.join("\n\n---\n\n");
-        // Also log raw error to console for inspection
-        // eslint-disable-next-line no-console
         console.error("[useUmbraSend] error:", err);
         reset({ stage: "error", error: msg || err?.message || String(err) });
         throw err;

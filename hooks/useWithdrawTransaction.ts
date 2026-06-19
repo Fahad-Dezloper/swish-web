@@ -37,7 +37,6 @@ export function useWithdrawTransaction(): UseWithdrawTransactionResult {
       setError(null);
 
       try {
-        // Step 1: Prepare — server builds tx with sponsor as fee payer, partial-signs
         const prepareRes = await fetch("/api/withdraw", {
           method: "POST",
           headers: {
@@ -59,7 +58,6 @@ export function useWithdrawTransaction(): UseWithdrawTransactionResult {
         const { transaction, blockhash, lastValidBlockHeight } =
           await prepareRes.json();
 
-        // Step 2: Client co-signs the partially signed tx
         const txBytes = Uint8Array.from(atob(transaction), (c) =>
           c.charCodeAt(0)
         );
@@ -80,7 +78,6 @@ export function useWithdrawTransaction(): UseWithdrawTransactionResult {
           )
         );
 
-        // Step 3: Submit fully signed tx
         const submitRes = await fetch("/api/withdraw/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

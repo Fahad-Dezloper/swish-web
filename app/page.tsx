@@ -33,26 +33,15 @@ export default function Home() {
   } = useUserActivity(walletAddress);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const mountedModal = useDelayedUnmount(activeModal, 350);
-  // Gate slide/fade animations until Privy resolves, so a logged-in user
-  // doesn't see the intro→wallet slide play on every page load.
   const [animate, setAnimate] = useState(false);
-  // FLIP refs: Framer's `layout` doesn't fire through the centered grandparent
-  // (verified — it teleports), so we slide the block by measuring its real
-  // before/after position and easing the exact delta via the Web Animations API.
   const mainRef = useRef<HTMLElement>(null);
   const prevMainTop = useRef<number | null>(null);
   const prevAuthed = useRef(authenticated);
 
   useEffect(() => {
-    // One-time once Privy resolves: enables the connect/disconnect slide so
-    // the initial load snaps into place and only real transitions animate.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (ready) setAnimate(true);
   }, [ready]);
 
-  // FLIP slide on connect/disconnect. Runs after every render to keep the
-  // last position fresh, but only animates when `authenticated` actually
-  // flipped (not on balance/activity re-renders).
   useLayoutEffect(() => {
     const el = mainRef.current;
     if (!el) return;
@@ -85,20 +74,14 @@ export default function Home() {
 
   const recentActivities = activities.slice(0, 4);
 
-  // Shared easing for the headline slide + content fade so they feel like
-  // one motion.
   const TRANSITION = { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const };
 
   return (
     <>
-      {/* FLIP-slid via the useLayoutEffect above (Framer `layout` teleports
-          through the centered grandparent). The whole block glides; content
-          crossfades. */}
       <main
         ref={mainRef}
         className="relative flex flex-col items-center p-4 w-full"
       >
-        {/* Persistent hero — the product in three verbs. */}
         <h1 className="text-3xl font-semibold text-[#121212] text-center leading-tight mb-8">
           Send. Request. Claim.
           <br />
@@ -108,7 +91,6 @@ export default function Home() {
         {ready && (
           <AnimatePresence mode="popLayout" initial={false}>
             {!authenticated ? (
-              // Empty / not-connected state: the whole intro.
               <motion.div
                 key="intro"
                 initial={{ opacity: 0 }}
@@ -134,7 +116,6 @@ export default function Home() {
               </motion.button>
             </motion.div>
           ) : (
-            // Connected: the action items fade in.
             <motion.div
               key="wallet"
               initial={{ opacity: 0 }}
@@ -143,12 +124,10 @@ export default function Home() {
               transition={TRANSITION}
               className="w-full max-w-[320px] flex flex-col items-center"
             >
-              {/* Account — balance + assets + wallet info */}
               <div className="w-full mb-8">
                 <AccountChip />
               </div>
 
-              {/* Action Buttons */}
               <div className="w-full flex gap-4 mb-10">
                 <div className="flex-1">
                   <ActionButton
@@ -164,7 +143,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Recent Activity */}
               <div className="w-full">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[#121212] text-sm font-medium">
@@ -180,8 +158,6 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* Reserved height so the spinner→rows swap doesn't change
-                    the block's height and re-target the headline mid-slide. */}
                 <div className="min-h-[184px]">
                   {activityLoading && recentActivities.length === 0 ? (
                     <div className="flex justify-center py-8">
@@ -210,9 +186,6 @@ export default function Home() {
         )}
       </main>
 
-      {/* Modals - only render when active to avoid multiple hook instances.
-          `mountedModal` lingers ~350ms past close so Modal's exit animation
-          can play before the component is unmounted. */}
       {mountedModal === "send" && (
         <SendModal
           isOpen={activeModal === "send"}

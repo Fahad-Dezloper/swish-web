@@ -10,15 +10,6 @@ export interface BalanceEntry<T> {
 
 const EMPTY = { value: null, isLoading: false, error: null } as const;
 
-/**
- * Builds a balance hook backed by a single shared cache keyed by wallet
- * address. All components calling the returned hook for the same address
- * share one cache entry, so:
- *  - a `refetch()` from anywhere updates everyone (instant balance after a
- *    send/withdraw, on home + profile + the account chip at once), and
- *  - one poll per address (not per component) keeps it fresh, so incoming
- *    deposits show up on their own within `pollMs`.
- */
 export function createSharedBalance<T>(
   fetcher: (address: string) => Promise<T>,
   pollMs?: number
@@ -64,13 +55,11 @@ export function createSharedBalance<T>(
           subs.set(address, set);
         }
         set.add(cb);
-        // First subscriber for this address kicks off the fetch + poll.
         if (!store.has(address)) fetchFor(address);
         if (pollMs && !pollers.has(address)) {
           pollers.set(
             address,
             setInterval(() => {
-              // Skip while the tab is hidden — no point burning RPC.
               if (
                 typeof document !== "undefined" &&
                 document.visibilityState !== "visible"

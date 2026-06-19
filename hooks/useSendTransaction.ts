@@ -53,7 +53,6 @@ export function useSendTransaction(): UseSendTransactionResult {
       setIsLoading(true);
       setError(null);
 
-      // Helper to cancel activity on failure
       const cancelActivity = async (activityId: string) => {
         try {
           await fetch("/api/activity/cancel", {
@@ -75,7 +74,6 @@ export function useSendTransaction(): UseSendTransactionResult {
       let activityId: string | null = null;
 
       try {
-        // Step 1: Call /api/send/prepare
         const prepareRes = await fetch("/api/send/prepare", {
           method: "POST",
           headers: {
@@ -100,32 +98,27 @@ export function useSendTransaction(): UseSendTransactionResult {
         const prepareResult: PrepareResponse = await prepareRes.json();
         activityId = prepareResult.activityId;
 
-        // Step 2: Decode unsigned deposit transaction from base64 to bytes
         const depositTxBytes = Uint8Array.from(
           atob(prepareResult.unsignedDepositTx),
           (c) => c.charCodeAt(0)
         );
 
-        // Step 3: Sign deposit transaction using wallet (user pays their own gas)
         let signedDepositResult;
         try {
           signedDepositResult = await solanaWallet.signTransaction(
             { transaction: depositTxBytes }
           );
         } catch (signError: any) {
-          // User rejected or signing failed - cancel the activity
           if (activityId) {
             await cancelActivity(activityId);
           }
           throw new Error(signError.message || "Transaction signing rejected");
         }
 
-        // Convert signed transaction to base64
         const signedDepositTx = btoa(
           String.fromCharCode.apply(null, Array.from(signedDepositResult.signedTransaction))
         );
 
-        // Step 4: Call /api/send/submit
         const submitRes = await fetch("/api/send/submit", {
           method: "POST",
           headers: {
@@ -140,11 +133,6 @@ export function useSendTransaction(): UseSendTransactionResult {
             amount: params.amount,
             token: params.token || "USDC",
             lastValidBlockHeight: prepareResult.lastValidBlockHeight,
-            // Pass providerId so the submit route can validate the session
-            // sig against the right protocol's message. PC + Send & Claim
-            // flows stamp activity.provider_id at create and submit reads
-            // from the row, but MB Send/Fulfill stamp at settle (PR #20
-            // rule), so submit needs the body fallback.
             providerId: params.providerId,
           }),
         });

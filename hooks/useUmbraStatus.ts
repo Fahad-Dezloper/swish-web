@@ -1,18 +1,5 @@
 "use client";
 
-/**
- * Check whether the current user's wallet is registered on Umbra.
- *
- * Auto-fetches on mount + when wallet address changes. Returns
- * `registered: true | false | null` where null = still loading or no
- * wallet connected.
- *
- * Used by:
- *   - Profile registration toggle (preset state)
- *   - Send picker UI (gate Umbra option for unregistered senders)
- *   - Smoke test page (display registered/not status)
- */
-
 import { useCallback, useEffect, useState } from "react";
 import { useWallets } from "@privy-io/react-auth/solana";
 

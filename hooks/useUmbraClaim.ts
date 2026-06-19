@@ -1,21 +1,5 @@
 "use client";
 
-/**
- * Claim incoming Umbra UTXOs into the user's encrypted balance.
- *
- * Direct Send to a user creates receiver-claimable UTXOs at their
- * address. These need an explicit claim step before they appear in the
- * encrypted balance and become withdrawable via Unlock.
- *
- * The claim is gasless via Umbra's relayer — user pays no SOL. After
- * the claim tx lands, Arcium MPC takes ~10-15s to credit the encrypted
- * balance.
- *
- * Kept separate from useUmbraUnlock so the two operations have distinct
- * UI states. Users can claim now, view balance go up, then unlock when
- * they're ready.
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
@@ -154,7 +138,6 @@ export function useUmbraClaim() {
         }
         cur = cur.cause;
       }
-      // eslint-disable-next-line no-console
       console.error("[useUmbraClaim] error:", err);
       setState({
         stage: "error",

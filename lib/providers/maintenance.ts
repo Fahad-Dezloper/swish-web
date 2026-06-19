@@ -1,11 +1,10 @@
 import { isProviderId, type ProviderId } from "./types";
 
-// Reads NEXT_PUBLIC_DISABLED_PROVIDERS as a comma-separated list of
-// ProviderId values. NEXT_PUBLIC_ prefix is required so both server-side
-// (auto router, prepare endpoints) and client-side (picker, banner) read
-// the same value. Unknown ids are silently dropped.
 export function getDisabledProviderIds(): ProviderId[] {
-  const raw = process.env.NEXT_PUBLIC_DISABLED_PROVIDERS ?? "";
+  const raw =
+    process.env.DISABLED_PROVIDERS ??
+    process.env.NEXT_PUBLIC_DISABLED_PROVIDERS ??
+    "";
   if (!raw.trim()) return [];
   return raw
     .split(",")

@@ -3,10 +3,8 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { createSharedBalance } from "./sharedBalance";
 
-// USDC token mint on Solana mainnet
 const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
-// Token program ID
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 );
@@ -35,12 +33,9 @@ async function fetchUSDCBalance(walletAddress: string): Promise<number> {
   );
 
   if (!usdcAccount) return 0;
-  // USDC has 6 decimals
   return usdcAccount.account.data.parsed.info.tokenAmount.uiAmount || 0;
 }
 
-// Shared cache keyed by address: a refetch from one place updates every
-// balance on screen. (No polling for now — pass an interval to re-enable.)
 const useShared = createSharedBalance<number>(fetchUSDCBalance);
 
 export function useUSDCBalance(

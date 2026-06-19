@@ -10,7 +10,6 @@ export const size = {
 export const contentType = "image/png";
 
 export default async function Image({ params }: { params: { id: string } }) {
-  // Fetch Jost font
   const fontData = await fetch(
     "https://fonts.googleapis.com/css2?family=Jost:wght@300;400&display=swap",
     { headers: { "User-Agent": "Mozilla/5.0" } }
@@ -24,7 +23,6 @@ export default async function Image({ params }: { params: { id: string } }) {
     ? await fetch(fontUrl).then((res) => res.arrayBuffer())
     : null;
 
-  // Fetch claim data
   let amount = 0;
   let message = "";
 
@@ -67,7 +65,6 @@ export default async function Image({ params }: { params: { id: string } }) {
           fontFamily: "Jost, sans-serif",
         }}
       >
-        {/* Logo */}
         <svg
           width="80"
           height="40"
@@ -84,7 +81,6 @@ export default async function Image({ params }: { params: { id: string } }) {
           />
         </svg>
 
-        {/* Label */}
         <div
           style={{
             fontSize: 40,
@@ -96,7 +92,6 @@ export default async function Image({ params }: { params: { id: string } }) {
           Claim
         </div>
 
-        {/* Amount */}
         <div
           style={{
             fontSize: 120,

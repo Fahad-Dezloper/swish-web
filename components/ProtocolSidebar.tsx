@@ -10,9 +10,6 @@ import type { ProviderId } from "@/lib/providers/types";
 import { isProviderDisabled } from "@/lib/providers/maintenance";
 import type { UmbraStatus } from "@/hooks/useUmbraStatus";
 
-// Accepts both the sender's live status (UmbraStatus, from useUmbraStatus)
-// and the recipient-check states ("idle"/"checking"). Only "registered" is
-// ever treated as eligible, so the exact other value doesn't matter.
 type UmbraEligibility = UmbraStatus | "idle" | "checking";
 
 interface ProtocolMeta {
@@ -46,9 +43,6 @@ const PROTOCOL_META: Record<ProviderId, ProtocolMeta> = {
   },
 };
 
-// Default routing preference (matches Auto router: Umbra > MB > PC for send).
-// Sidebar surfaces available protocols in this order, with disabled ones
-// pushed to the bottom.
 const PROTOCOL_PREFERENCE: ProviderId[] = [
   "umbra",
   "magicblock-per",
@@ -63,9 +57,6 @@ interface ProtocolSidebarProps {
   flow: FlowKind;
   umbraStatus: UmbraEligibility;
   recipientUmbraStatus: UmbraEligibility;
-  // When true (default) the panel slides in from the right — used inside
-  // SendModal/SendClaimModal where it overlays the form. Set false when the
-  // panel IS the modal (e.g. the request page) so only the modal animates.
   slideIn?: boolean;
 }
 
@@ -89,15 +80,11 @@ export function ProtocolSidebar({
     return isProviderDisabled(p);
   };
 
-  // Send & Claim never routes through Umbra (the burner SC pattern adds a
-  // 0.7% claim fee + failure modes without giving the recipient any privacy
-  // benefit — see lib/router/autoRoute.ts). Drop it from the SC picker.
   const preference =
     flow === "send_claim"
       ? PROTOCOL_PREFERENCE.filter((p) => p !== "umbra")
       : PROTOCOL_PREFERENCE;
 
-  // Sort: available protocols first (preserve preference order), disabled at bottom
   const orderedProtocols = [
     ...preference.filter((p) => !isProtocolDisabled(p)),
     ...preference.filter((p) => isProtocolDisabled(p)),
@@ -115,9 +102,6 @@ export function ProtocolSidebar({
         : {})}
       className="absolute inset-0 z-50 bg-[#fafafa] flex flex-col overflow-y-auto"
     >
-      {/* Header — the back button only makes sense as a slide-over panel
-          (returns to the form behind it). As a standalone modal there's
-          nothing to go back to, so it's dropped (dismiss via backdrop). */}
       <div className="flex items-center gap-3 px-6 pt-2 pb-4 sticky top-0 bg-[#fafafa] z-10">
         {slideIn && (
           <button
@@ -139,7 +123,6 @@ export function ProtocolSidebar({
         </h3>
       </div>
 
-      {/* Protocol cards */}
       <div className="px-6 pb-8 space-y-3">
         {orderedProtocols.map((p) => {
           const meta = PROTOCOL_META[p];

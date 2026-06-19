@@ -33,7 +33,6 @@ export function ClaimPassphraseModal({
   const [passphrase, setPassphrase] = useState("");
   const [state, setState] = useState<ModalState>("input");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Fee shown reflects the row's actual protocol picked by the sender.
   const { feeUSDC: partnerFee } = useProtocolFee(providerId, amount, "send_claim");
   const total = amount - partnerFee;
 
@@ -82,7 +81,6 @@ export function ClaimPassphraseModal({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Image src="/assets/receive.svg" alt="Claim" width={24} height={24} className="invert" />
         <h2 className="text-2xl font-semibold text-[#121212]">Claim</h2>
@@ -96,7 +94,6 @@ export function ClaimPassphraseModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Passphrase Input */}
             <div className="mb-6">
               <label className="text-sm text-[#121212]/50 mb-1 block">
                 Enter passphrase
@@ -110,7 +107,6 @@ export function ClaimPassphraseModal({
               />
             </div>
 
-            {/* Amount Details */}
             <div className="space-y-2 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -126,7 +122,6 @@ export function ClaimPassphraseModal({
               </div>
             </div>
 
-            {/* Proceed Button */}
             <motion.button
               onClick={handleProceed}
               disabled={!passphrase.trim()}
@@ -158,7 +153,6 @@ export function ClaimPassphraseModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Success Details */}
             <div className="space-y-2 mb-8">
               <div className="flex justify-between">
                 <span className="text-[#121212]">Amount</span>
@@ -174,7 +168,6 @@ export function ClaimPassphraseModal({
               </div>
             </div>
 
-            {/* Success Button */}
             <motion.button
               onClick={handleClose}
               whileTap={{ scale: 0.98 }}

@@ -25,7 +25,6 @@ export function AddFundsModal({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
     }
   };
 
@@ -36,7 +35,6 @@ export function AddFundsModal({
           Deposit
         </h2>
 
-        {/* QR Code */}
         <div className="bg-white p-4 rounded-2xl mb-6">
           <QRCodeSVG
             value={walletAddress}
@@ -46,7 +44,6 @@ export function AddFundsModal({
           />
         </div>
 
-        {/* Address */}
         <button
           onClick={copied ? undefined : handleCopy}
           className={`flex items-center gap-2 px-4 py-2 rounded-full bg-[#121212]/5 transition-colors mb-3 max-w-full ${copied ? "pointer-events-none" : "hover:bg-[#121212]/10"}`}

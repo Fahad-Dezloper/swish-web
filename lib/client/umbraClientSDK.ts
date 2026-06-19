@@ -1,15 +1,5 @@
 "use client";
 
-/**
- * Browser-side Umbra SDK helpers — counterpart to lib/sponsor/umbraSDK.ts
- * (server-side). These are safe to import from "use client" components
- * and run in the browser bundle.
- *
- * Used by useUmbraSend, useUmbraRegister, etc. For the architecture
- * decision behind running Umbra client-side for direct Send / Request
- * fulfill, see [Umbra pivot](memory/project_umbra_pivot_to_client_side.md).
- */
-
 import { getUmbraClient, assertMasterSeed } from "@umbra-privacy/sdk";
 import type { IUmbraClient, IUmbraSigner } from "@umbra-privacy/sdk/interfaces";
 import type { MasterSeed } from "@umbra-privacy/sdk/types";
@@ -30,8 +20,6 @@ import type {
 
 const UMBRA_INDEXER = "https://utxo-indexer.api.umbraprivacy.com";
 
-// Cached suite — circuit asset providers can be reused across all
-// browser-side SDK calls within the same page session.
 let cachedSuite: IZkProverSuite | null = null;
 
 export function getBrowserUmbraProverSuite(): IZkProverSuite {
@@ -40,9 +28,6 @@ export function getBrowserUmbraProverSuite(): IZkProverSuite {
   const assetProvider = getCdnZkAssetProvider();
   const deps = { assetProvider };
 
-  // Same variance cast as the server-side suite — see umbraSDK.ts for
-  // why FromPublicBalance provers need to be cast to the wider
-  // I*Utxo types for the suite slots.
   const suite: IZkProverSuite = {
     registration: getUserRegistrationProver(deps),
     utxoSelfClaimable: getCreateSelfClaimableUtxoFromPublicBalanceProver(
@@ -65,28 +50,13 @@ export function getBrowserUmbraProverSuite(): IZkProverSuite {
 export interface BrowserUmbraClientArgs {
   signer: IUmbraSigner;
   rpcUrl: string;
-  // Defaults to deferred (lazy master seed signing) — recommended.
   deferMasterSeedSignature?: boolean;
 }
 
-// Per-address client cache. The Umbra client caches master seed
-// internally (after first derivation), so reusing the same client
-// across sends in the same browser session avoids re-prompting for
-// the consent signMessage on every send. Keyed by signer address so
-// switching wallets invalidates the cache.
 let cachedClient: {
   address: string;
   client: Promise<IUmbraClient>;
 } | null = null;
-
-// SessionStorage-backed master seed persistence. Survives page refresh
-// within the same browser tab; cleared on tab close or logout. Keyed by
-// wallet address so different wallets don't share keys.
-//
-// Trust model: same as PC's session sig today. The master seed is
-// sensitive but sessionStorage is per-tab + cleared on close, which is
-// acceptable for v1. For higher security, consider encrypting at rest
-// with a wallet-derived key (one extra signMessage per session).
 
 const SESSION_STORAGE_PREFIX = "umbra_master_seed:";
 
@@ -109,7 +79,6 @@ function makeSessionStorageMasterSeedStorage(address: string) {
         assertMasterSeed(seed);
         return { exists: true, seed } as const;
       } catch {
-        // Corrupt entry — clear it.
         sessionStorage.removeItem(masterSeedStorageKey(address));
         return { exists: false } as const;
       }
@@ -131,12 +100,6 @@ export function clearStoredMasterSeed(address: string) {
   sessionStorage.removeItem(masterSeedStorageKey(address));
 }
 
-/**
- * Check whether a master seed is already cached for a given address.
- * Used by `useUmbraBalance` to decide whether to auto-fetch (silent) vs
- * wait for the user to click "Reveal" — keeps profile loads from
- * surprising users with a wallet popup on a fresh session.
- */
 export function hasStoredMasterSeed(address: string): boolean {
   if (typeof window === "undefined") return false;
   return sessionStorage.getItem(masterSeedStorageKey(address)) !== null;
@@ -167,14 +130,10 @@ export async function getBrowserUmbraClient(
   return promise;
 }
 
-// Clear the cached client — call on wallet disconnect / logout.
 export function clearBrowserUmbraClientCache() {
   cachedClient = null;
 }
 
-// Cached Umbra relayer instance for browser. Used by claim flows
-// (claimable UTXO → encrypted balance) which require relayer-submitted
-// transactions.
 let cachedRelayer: any | null = null;
 
 export async function getBrowserUmbraRelayer() {

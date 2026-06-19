@@ -1,23 +1,5 @@
 "use client";
 
-/**
- * Custom IUmbraSigner adapter for Privy wallets.
- *
- * Replaces Umbra SDK's `createSignerFromWalletAccount` adapter, which
- * has a bug where the returned signed transaction uses the ORIGINAL
- * (pre-signing) messageBytes but the wallet's NEW signatures. If the
- * wallet modifies the tx during signing (which some wallets do for fee
- * payer adjustments / priority fees), the signature ends up valid for
- * the modified bytes but the SDK submits the original — failing
- * on-chain signature verification.
- *
- * Our adapter returns the FULLY DECODED signed transaction (modified
- * messageBytes + signatures), so the submitted tx is always what was
- * actually signed.
- *
- * See [Umbra pivot](memory/project_umbra_pivot_to_client_side.md).
- */
-
 import {
   getTransactionDecoder,
   getTransactionEncoder,
@@ -29,8 +11,8 @@ import {
 import type { IUmbraSigner } from "@umbra-privacy/sdk/interfaces";
 
 export function createUmbraSignerFromPrivyWallet(
-  wallet: any, // wallet-standard Wallet (Privy's PrivyStandardWallet implements this)
-  account: any // wallet-standard WalletAccount
+  wallet: any,
+  account: any
 ): IUmbraSigner {
   const features = wallet.features;
   const signTx = features[SolanaSignTransaction];
@@ -59,11 +41,6 @@ export function createUmbraSignerFromPrivyWallet(
         account,
         transaction: wireBytes,
       });
-      // Take the actual signed bytes (in case Privy modified the tx
-      // during signing — common for fee payer / priority fee
-      // adjustments) but preserve the original kit metadata
-      // (`lifetimeConstraint`, etc.) which doesn't survive wire
-      // round-trip but is needed by the SDK for confirmation polling.
       const decoded = decoder.decode(output.signedTransaction);
       return {
         ...transaction,

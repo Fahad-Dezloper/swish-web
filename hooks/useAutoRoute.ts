@@ -18,8 +18,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { ProviderId } from "@/lib/providers/types";
-import type { AutoFlow } from "@/lib/router/autoRoute";
+import type { AutoFlow, ProviderId } from "@/lib/providers/types";
 
 interface UseAutoRouteArgs {
   enabled: boolean;

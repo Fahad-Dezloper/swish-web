@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * Client-side Umbra Request fulfill hook.
- *
- * Same SDK flow as useUmbraSend (1 consent + 2 deposit txs = 3 prompts),
- * but instead of creating a new activity row, marks an existing
- * `type='request'` row as settled with provider_id='umbra'.
- *
- * Uses /api/umbra/fulfill/record (atomic via claimActivity) so two
- * payers racing the same request can't both succeed.
- */
-
 import { useCallback, useState } from "react";
 import { useStandardWallets, useWallets } from "@privy-io/react-auth/solana";
 
@@ -96,9 +85,6 @@ export function useUmbraFulfill() {
 
         const client = await getBrowserUmbraClient({ signer, rpcUrl });
 
-        // Pre-flight: requester must be FULLY registered (PDA + x25519 +
-        // commitment). Half-registered would pass `state === "exists"` but
-        // the deposit would fail mid-flight.
         reset({ stage: "checking-recipient", detail: params.receiverAddress });
         const query = getUserAccountQuerierFunction({ client });
         const recipientState = await query(params.receiverAddress as any);
@@ -146,9 +132,6 @@ export function useUmbraFulfill() {
         });
         if (!recordRes.ok) {
           const json = await recordRes.json().catch(() => ({}));
-          // Deposit already settled on-chain. Surface the error but don't
-          // throw — the requester got paid; only the activity row didn't
-          // update. Show a distinct warning so the user knows.
           console.warn(
             "Fulfill recording failed (deposit already settled):",
             json
@@ -173,7 +156,6 @@ export function useUmbraFulfill() {
           current = current.cause;
         }
         const msg = parts.join("\n\n---\n\n");
-        // eslint-disable-next-line no-console
         console.error("[useUmbraFulfill] error:", err);
         reset({ stage: "error", error: msg || err?.message || String(err) });
         throw err;

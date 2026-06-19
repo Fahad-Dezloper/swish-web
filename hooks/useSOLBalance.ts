@@ -36,7 +36,6 @@ async function fetchSOLBalance(walletAddress: string): Promise<SolData> {
   };
 }
 
-// Shared cache, no polling for now (pass an interval to re-enable).
 const useShared = createSharedBalance<SolData>(fetchSOLBalance);
 
 export function useSOLBalance(
