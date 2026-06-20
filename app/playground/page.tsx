@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Script from "next/script";
+import { motion, AnimatePresence } from "motion/react";
 
 /**
  * The Plug playground — `plug.swish.cash/`.
@@ -10,6 +11,9 @@ import Script from "next/script";
  * copy the snippet. The live preview loads the vanilla loader (`/plug.js`) from
  * this same origin and points it at this origin's `/plug` iframe, so it works
  * both locally (localhost:3000) and in prod (plug.swish.cash) with no config.
+ *
+ * Styled to match the main Swish app shell: light #fafafa surface, dark
+ * #121212 text, the muted-second-line headline, and the app's pill buttons.
  */
 
 interface PlugOpenOpts {
@@ -48,6 +52,31 @@ function SwishMark({ size = 18 }: { size?: number }) {
         strokeMiterlimit="3.99393"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+/** Copy / check icons — same SVGs the app's profile uses, stroked w/ currentColor. */
+function CopyIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path
+        d="M5.5 1H12.6C14.8402 1 15.9603 1 16.816 1.43597C17.5686 1.81947 18.1805 2.43139 18.564 3.18404C19 4.03969 19 5.15979 19 7.4V14.5M4.2 19H12.3C13.4201 19 13.9802 19 14.408 18.782C14.7843 18.5903 15.0903 18.2843 15.282 17.908C15.5 17.4802 15.5 16.9201 15.5 15.8V7.7C15.5 6.57989 15.5 6.01984 15.282 5.59202C15.0903 5.21569 14.7843 4.90973 14.408 4.71799C13.9802 4.5 13.4201 4.5 12.3 4.5H4.2C3.0799 4.5 2.51984 4.5 2.09202 4.71799C1.71569 4.90973 1.40973 5.21569 1.21799 5.59202C1 6.01984 1 6.57989 1 7.7V15.8C1 16.9201 1 17.4802 1.21799 17.908C1.40973 18.2843 1.71569 18.5903 2.09202 18.782C2.51984 19 3.0799 19 4.2 19Z"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon({ height = 9 }: { height?: number }) {
+  const width = Math.round(height * (19 / 10));
+  return (
+    <svg width={width} height={height} viewBox="0 0 19 10" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M2.00024 2.44654L5.14705 7.84107" stroke="currentColor" strokeWidth={4} strokeLinecap="round" />
+      <path d="M5.26953 7.86023L16.2727 2.00041" stroke="currentColor" strokeWidth={4} strokeLinecap="round" />
     </svg>
   );
 }
@@ -127,107 +156,131 @@ export default function PlaygroundPage() {
   function copySnippet() {
     navigator.clipboard?.writeText(snippet).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), 2000);
     });
   }
 
+  const labelClass = "text-sm text-[#121212]/50 mb-1.5 block";
+  const optionalClass = "text-[#121212]/30";
   const inputClass =
-    "w-full h-12 px-4 rounded-full border border-[#121212]/10 bg-transparent text-[#121212] outline-none focus:border-[#121212]/30 transition-colors placeholder:text-[#121212]/30";
+    "w-full h-12 px-5 rounded-full border border-[#121212]/10 bg-white text-[#121212] outline-none focus:border-[#121212]/30 transition-colors placeholder:text-[#121212]/30";
+  const cardClass =
+    "bg-white border border-[#121212]/[0.07] rounded-3xl p-6 sm:p-7 shadow-[0_2px_16px_rgba(18,18,18,0.04)]";
+
+  // Match the app's easing, with a gentle staggered fade-up on mount.
+  const EASE = [0.22, 1, 0.36, 1] as const;
+  const container = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.09, delayChildren: 0.08 } },
+  };
+  const item = {
+    hidden: { opacity: 0, y: 14 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
+  };
 
   return (
-    <div className="min-h-screen bg-[#121212] text-[#fafafa]">
+    <div className="min-h-screen bg-[#fafafa] text-[#121212]">
       <Script src="/plug.js" strategy="afterInteractive" onLoad={() => setReady(true)} />
 
-      <main className="max-w-5xl mx-auto px-6 py-16 sm:py-24">
-        {/* Hero */}
-        <header className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 text-[#008834] mb-5">
-            <SwishMark size={22} />
-            <span className="text-sm font-medium tracking-wide uppercase text-[#fafafa]/50">
-              The Plug · by Swish
+      {/* Header — centered mark, matching the app shell. */}
+      <motion.header
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, ease: EASE }}
+        className="flex justify-center pt-10 pb-2"
+      >
+        <span className="inline-flex items-center text-[#121212]">
+          <SwishMark size={20} />
+        </span>
+      </motion.header>
+
+      <motion.main
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="max-w-xl mx-auto px-5 pt-10 pb-20"
+      >
+        {/* Hero — "The Plug" as the headline; tagline + description below. */}
+        <motion.div variants={item} className="text-center mb-12">
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight text-[#121212]">
+            The Plug
+          </h1>
+          <p className="mt-3 text-lg font-medium">
+            <span className="text-[#121212]">Private USDC payments,</span>{" "}
+            <span className="text-[#121212]/40">in one button.</span>
+          </p>
+        </motion.div>
+
+        {/* Configure */}
+        <motion.section variants={item} className={cardClass}>
+          <h2 className="text-sm font-medium text-[#121212]/40 uppercase tracking-wide mb-5">
+            Configure
+          </h2>
+
+          <label className={labelClass}>
+            Recipient wallet address
+            <span className={optionalClass}> · optional</span>
+          </label>
+          <input
+            className={`${inputClass} mb-4 truncate`}
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value.trim())}
+            placeholder="Solana address — omit to let the payer choose"
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+
+          <label className={labelClass}>
+            Amount (USDC)
+            <span className={optionalClass}> · optional</span>
+          </label>
+          <input
+            className={`${inputClass} mb-4`}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+            inputMode="decimal"
+            placeholder="Locked if set — omit to let the payer type it"
+          />
+
+          <label className={labelClass}>
+            Button label
+            <span className={optionalClass}> · optional</span>
+          </label>
+          <input
+            className={inputClass}
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Deposit Privately"
+          />
+        </motion.section>
+
+        {/* Live preview */}
+        <motion.section variants={item} className={`${cardClass} mt-4`}>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-sm font-medium text-[#121212]/40 uppercase tracking-wide">
+              Live preview
+            </h2>
+            <span className="text-xs text-[#121212]/40 truncate max-w-[55%] text-right">
+              {lastEvent ? `Last event: ${lastEvent}` : "Click to try the flow"}
             </span>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight">
-            Private USDC payments,
-            <br />
-            in one button.
-          </h1>
-          <p className="mt-5 text-[#fafafa]/60 max-w-xl mx-auto text-lg">
-            Drop the Plug into any site. Your users pay privately on Solana — no
-            protocol plumbing, no custody, no fees. Configure it below and copy
-            the snippet.
-          </p>
-        </header>
 
-        {/* Configure + preview */}
-        <div className="grid md:grid-cols-2 gap-5">
-          {/* Configurator */}
-          <section className="bg-[#fafafa] text-[#121212] rounded-3xl p-6 sm:p-7">
-            <h2 className="text-lg font-medium mb-5">Configure</h2>
-
-            <label className="text-sm text-[#121212]/50 mb-1 block">
-              Recipient wallet address
-              <span className="text-[#121212]/30"> · optional</span>
-            </label>
-            <input
-              className={`${inputClass} mb-4 truncate`}
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value.trim())}
-              placeholder="Solana address — omit to let the payer choose"
-              spellCheck={false}
-              autoCapitalize="none"
-            />
-
-            <label className="text-sm text-[#121212]/50 mb-1 block">
-              Amount (USDC)
-              <span className="text-[#121212]/30"> · optional</span>
-            </label>
-            <input
-              className={`${inputClass} mb-4`}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-              inputMode="decimal"
-              placeholder="Locked if set — omit to let the payer type it"
-            />
-
-            <label className="text-sm text-[#121212]/50 mb-1 block">
-              Button label
-              <span className="text-[#121212]/30"> · optional</span>
-            </label>
-            <input
-              className={inputClass}
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Deposit Privately"
-            />
-          </section>
-
-          {/* Live preview */}
-          <section className="bg-[#fafafa] text-[#121212] rounded-3xl p-6 sm:p-7 flex flex-col">
-            <h2 className="text-lg font-medium mb-1">Live preview</h2>
-            <p className="text-sm text-[#121212]/50 mb-6">
-              The real button + modal — click to try the flow.
-            </p>
-
-            <div className="flex-1 flex items-center justify-center rounded-2xl bg-[#121212]/[0.03] border border-dashed border-[#121212]/10 py-12">
-              <button
-                onClick={openPreview}
-                disabled={!ready}
-                className="inline-flex items-center gap-2 bg-[#121212] text-[#fafafa] rounded-full px-6 py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(18,18,18,0.15)] whitespace-nowrap"
-              >
-                <SwishMark size={15} />
-                {labelText}
-              </button>
-            </div>
-
-            <p className="text-xs text-center text-[#121212]/40 mt-4 h-4">
-              {lastEvent ? `Last event: ${lastEvent}` : " "}
-            </p>
-          </section>
-        </div>
+          <div className="flex items-center justify-center rounded-2xl bg-[#fafafa] border border-[#121212]/[0.06] py-14">
+            <motion.button
+              onClick={openPreview}
+              disabled={!ready}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.15, ease: EASE }}
+              className="inline-flex items-center gap-2 bg-[#121212] text-[#fafafa] rounded-full px-6 h-11 font-semibold hover:bg-[#121212]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(18,18,18,0.15)] whitespace-nowrap"
+            >
+              <SwishMark size={15} />
+              {labelText}
+            </motion.button>
+          </div>
+        </motion.section>
 
         {/* Snippet */}
-        <section className="mt-5 bg-[#fafafa] text-[#121212] rounded-3xl p-6 sm:p-7">
+        <motion.section variants={item} className={`${cardClass} mt-4`}>
           <div className="flex items-center justify-between mb-4">
             <div className="inline-flex rounded-full bg-[#121212]/[0.05] p-1">
               {(["react", "script"] as const).map((t) => (
@@ -244,12 +297,38 @@ export default function PlaygroundPage() {
                 </button>
               ))}
             </div>
-            <button
+            <motion.button
               onClick={copySnippet}
-              className="text-sm font-medium text-[#008834] hover:opacity-80 transition-opacity"
+              whileTap={{ scale: 0.9 }}
+              aria-label={copied ? "Copied" : "Copy snippet"}
+              className="inline-flex h-5 w-5 items-center justify-center text-[#121212]"
             >
-              {copied ? "Copied!" : "Copy"}
-            </button>
+              <AnimatePresence mode="wait" initial={false}>
+                {copied ? (
+                  <motion.span
+                    key="check"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.18, ease: EASE }}
+                    className="inline-flex"
+                  >
+                    <CheckIcon />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="copy"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.18, ease: EASE }}
+                    className="inline-flex"
+                  >
+                    <CopyIcon />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
           </div>
 
           {tab === "react" && (
@@ -267,10 +346,7 @@ export default function PlaygroundPage() {
           </pre>
 
           <p className="text-xs text-[#121212]/50 mt-3 leading-relaxed">
-            <span className="text-[#121212]/70 font-medium">
-              recipient
-            </span>
-            ,{" "}
+            <span className="text-[#121212]/70 font-medium">recipient</span>,{" "}
             <span className="text-[#121212]/70 font-medium">amount</span>, and{" "}
             <span className="text-[#121212]/70 font-medium">reference</span> are
             all optional. Omit <span className="font-medium">recipient</span> to
@@ -281,30 +357,16 @@ export default function PlaygroundPage() {
             <span className="text-[#121212]/70 font-medium">onSuccess</span> so
             you can match a payment to your order.
           </p>
-        </section>
+        </motion.section>
 
         {/* Footer */}
-        <footer className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[#fafafa]/40">
-          <span className="inline-flex items-center gap-1.5">
-            Powered by
-            <a
-              href="https://swish.cash"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[#fafafa]/70 hover:text-[#fafafa] transition-colors"
-            >
-              <SwishMark size={13} /> Swish
-            </a>
-          </span>
-          <span className="inline-flex items-center gap-4">
-            <a href="https://swish.cash" target="_blank" rel="noreferrer" className="hover:text-[#fafafa]/70 transition-colors">
-              swish.cash
-            </a>
-            <span className="text-[#fafafa]/20">·</span>
-            <span>Non-custodial · No fees</span>
-          </span>
-        </footer>
-      </main>
+        <motion.footer
+          variants={item}
+          className="mt-10 flex items-center justify-center text-sm text-[#121212]/40"
+        >
+          <span>Non-custodial · No fees</span>
+        </motion.footer>
+      </motion.main>
     </div>
   );
 }

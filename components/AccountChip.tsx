@@ -141,12 +141,33 @@ export function AccountChip({ compact = false }: { compact?: boolean }) {
               <span className="text-[#121212] text-md flex-1 text-left">
                 {walletAddress ? formatAddr(walletAddress) : ""}
               </span>
-              <Image
-                src={copied ? "/assets/success-alt.svg" : "/assets/copy-icon.svg"}
-                alt=""
-                width={copied ? 16 : 14}
-                height={copied ? 8 : 14}
-              />
+              <span className="inline-flex h-4 w-4 items-center justify-center">
+                <AnimatePresence mode="wait" initial={false}>
+                  {copied ? (
+                    <motion.span
+                      key="check"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                      className="inline-flex"
+                    >
+                      <Image src="/assets/success-alt.svg" alt="" width={16} height={8} />
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="copy"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                      className="inline-flex"
+                    >
+                      <Image src="/assets/copy-icon.svg" alt="" width={14} height={14} />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </span>
             </button>
 
             {/* X Handle */}
