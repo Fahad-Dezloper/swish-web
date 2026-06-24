@@ -182,6 +182,15 @@ export default function PlaygroundPage() {
     <div className="min-h-screen bg-[#fafafa] text-[#121212]">
       <Script src="/plug.js" strategy="afterInteractive" onLoad={() => setReady(true)} />
 
+      {/* Cloudflare Web Analytics — separate plug.swish.cash property. Scoped to
+          the playground page only (NOT the /plug widget iframe), so this counts
+          demo visits, not embedded-widget impressions on partner sites. */}
+      <Script
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        strategy="afterInteractive"
+        data-cf-beacon='{"token": "087486ba52224631be8ad9023e8c7f70"}'
+      />
+
       {/* Header — centered mark, matching the app shell. */}
       <motion.header
         initial={{ opacity: 0 }}
