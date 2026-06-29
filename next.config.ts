@@ -60,10 +60,18 @@ const connectSrc = [
 // THIS route may embed (appended to frame-src/child-src). The playground needs
 // the latter so it can host the Plug iframe (same-origin in prod; cross-origin
 // localhost in dev).
-const buildCsp = (frameAncestors: string, embedSrc = "") =>
+// `extraScriptSrc`/`extraConnectSrc` let a single route opt into extra origins
+// (e.g. Cloudflare Web Analytics on the main app) WITHOUT loosening the
+// embeddable /plug widget's policy, which stays minimal.
+const buildCsp = (
+  frameAncestors: string,
+  embedSrc = "",
+  extraScriptSrc = "",
+  extraConnectSrc = ""
+) =>
   [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://challenges.cloudflare.com",
+    `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://challenges.cloudflare.com ${extraScriptSrc}`.trim(),
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://auth.privy.io https://explorer-api.walletconnect.com",
     "font-src 'self'",
@@ -73,12 +81,18 @@ const buildCsp = (frameAncestors: string, embedSrc = "") =>
     `frame-ancestors ${frameAncestors}`,
     `child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org ${embedSrc}`.trim(),
     `frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com ${embedSrc}`.trim(),
-    `connect-src ${connectSrc}`,
+    `connect-src ${connectSrc} ${extraConnectSrc}`.trim(),
     "worker-src 'self' blob:",
     "manifest-src 'self'",
   ].join("; ");
 
-const csp = buildCsp("'none'");
+// Main app gets Cloudflare Web Analytics (beacon script + RUM POST origin).
+const csp = buildCsp(
+  "'none'",
+  "",
+  "https://static.cloudflareinsights.com",
+  "https://cloudflareinsights.com"
+);
 const plugCsp = buildCsp("*");
 
 // The playground hosts the Plug iframe. In prod both are served from
@@ -86,7 +100,9 @@ const plugCsp = buildCsp("*");
 // localhost (plug.localhost isn't a Privy-secure context), so allow that too.
 const playgroundCsp = buildCsp(
   "'none'",
-  `'self'${process.env.NODE_ENV !== "production" ? " http://localhost:3000" : ""}`
+  `'self'${process.env.NODE_ENV !== "production" ? " http://localhost:3000" : ""}`,
+  "https://static.cloudflareinsights.com",
+  "https://cloudflareinsights.com"
 );
 
 // Security headers shared by every route. Framing control (CSP frame-ancestors

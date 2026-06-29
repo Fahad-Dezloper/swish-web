@@ -157,14 +157,33 @@ export default function ProfilePage() {
                 onClick={copied ? undefined : handleCopyAddress}
                 className={`p-1 rounded-full transition-colors ${copied ? "pointer-events-none" : "hover:bg-[#121212]/5"}`}
               >
-                <Image
-                  src={
-                    copied ? "/assets/success-alt.svg" : "/assets/copy-icon.svg"
-                  }
-                  alt=""
-                  width={copied ? 16 : 16}
-                  height={copied ? 8 : 16}
-                />
+                <span className="inline-flex h-4 w-4 items-center justify-center">
+                  <AnimatePresence mode="wait" initial={false}>
+                    {copied ? (
+                      <motion.span
+                        key="check"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        className="inline-flex"
+                      >
+                        <Image src="/assets/success-alt.svg" alt="" width={16} height={8} />
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key="copy"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        className="inline-flex"
+                      >
+                        <Image src="/assets/copy-icon.svg" alt="" width={16} height={16} />
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </span>
               </button>
               <button
                 onClick={logout}

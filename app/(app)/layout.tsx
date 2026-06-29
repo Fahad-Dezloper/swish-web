@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { Logo, Footer, MaintenanceBanner } from "@/components";
 import Providers from "../providers";
 
@@ -30,6 +31,15 @@ export default function AppLayout({
           <Footer />
         </div>
       </div>
+
+      {/* Cloudflare Web Analytics — scoped to the (app) group so it covers all
+          real site traffic (home, /r, /c, /p, legal) but NOT the embeddable
+          /plug widget or /playground (which live outside this group). */}
+      <Script
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        strategy="afterInteractive"
+        data-cf-beacon='{"token": "319b479821e84cfeb351525b2d913c4b"}'
+      />
     </Providers>
   );
 }
